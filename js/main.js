@@ -63,16 +63,21 @@ const view = new CanvasView($('canvas-frame'), $('canvas'), {
 
 // ---------- Rendering ----------
 const reserveDemo = createReserveDemo($('reserve-demo'));
-// The X hides the how-to (animation and text) on this device; the ? beside Exit reservation brings it back.
-let demoDismissed = false;
-try { demoDismissed = localStorage.getItem('collab-card-hide-demo') === '1'; } catch {}
+// The how-to (animation and text) shows by default for each account in each browser. The X hides
+// it, remembered per account on this device; the ? beside Exit reservation brings it back.
+const helpMemory = new Map();  // fallback when the browser blocks storage
+const helpKey = () => 'collab-card-hide-help:' + (state.me?.id || 'guest');
+function helpHidden() {
+  try { const v = localStorage.getItem(helpKey()); if (v !== null) return v === '1'; } catch {}
+  return helpMemory.get(helpKey()) || false;
+}
 function setHelpHidden(hidden) {
-  demoDismissed = hidden;
-  try { localStorage.setItem('collab-card-hide-demo', hidden ? '1' : '0'); } catch {}
+  helpMemory.set(helpKey(), hidden);
+  try { localStorage.setItem(helpKey(), hidden ? '1' : '0'); } catch {}
   render();
 }
 $('demo-close').addEventListener('click', () => setHelpHidden(true));
-$('btn-help').addEventListener('click', () => setHelpHidden(!demoDismissed));
+$('btn-help').addEventListener('click', () => setHelpHidden(!helpHidden()));
 
 function renderAccount() {
   const box = $('acct-box');
@@ -110,10 +115,10 @@ function render() {
   $('btn-reserve').textContent = reserving ? 'Exit reservation' : 'Reserve an area';
   $('btn-preview').textContent = state.showGuides ? 'Hide reservations' : 'Show reservations';
   $('tools-note').textContent = !state.me ? 'Sign in to see the card.'
-    : view.mode === 'reserve' ? (demoDismissed ? '' : 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.')
+    : view.mode === 'reserve' ? (helpHidden() ? '' : 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.')
     : state.project.locked ? (isHost() ? 'Editing is locked for everyone else.' : 'The card is locked, so it can’t be changed.') : '';
   $('btn-help').hidden = !reserving;
-  reserveDemo.show(view.mode === 'reserve' && !demoDismissed, state.me ? styleFor(state.me.id).colour : undefined);
+  reserveDemo.show(view.mode === 'reserve' && !helpHidden(), state.me ? styleFor(state.me.id).colour : undefined);
   $('host-panel').hidden = !isHost();
   $('btn-lock').textContent = state.project.locked ? 'Unlock editing' : 'Lock editing';
   // While reserving, every other button is off until the shape is finished or reserving is exited.
