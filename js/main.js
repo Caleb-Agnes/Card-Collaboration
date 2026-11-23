@@ -64,7 +64,7 @@ const view = new CanvasView($('canvas-frame'), $('canvas'), {
 // ---------- Rendering ----------
 const reserveDemo = createReserveDemo($('reserve-demo'));
 // The how-to (animation and text) shows by default for each account in each browser. The X hides
-// it, remembered per account on this device; the ? beside Exit reservation brings it back.
+// it, remembered per account on this device; the ? on Exit reservation brings it back.
 const helpMemory = new Map();  // fallback when the browser blocks storage
 const helpKey = () => 'collab-card-hide-help:' + (state.me?.id || 'guest');
 function helpHidden() {
@@ -77,7 +77,7 @@ function setHelpHidden(hidden) {
   render();
 }
 $('demo-close').addEventListener('click', () => setHelpHidden(true));
-$('btn-help').addEventListener('click', () => setHelpHidden(!helpHidden()));
+$('btn-help').addEventListener('click', () => setHelpHidden(false));  // only the X hides it
 
 function renderAccount() {
   const box = $('acct-box');
