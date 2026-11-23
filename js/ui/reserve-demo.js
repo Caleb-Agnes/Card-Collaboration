@@ -52,10 +52,11 @@ function stateAt(t) {
 const ease = k => (k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
 
 /**
- * @param {HTMLCanvasElement} canvas
+ * @param {HTMLElement} box  wrapper holding the <canvas>; hidden when not playing
  * @returns {{ show(on: boolean, colour?: string): void }}
  */
-export function createReserveDemo(canvas) {
+export function createReserveDemo(box) {
+  const canvas = box.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   let raf = 0, start = 0, colour = '#000';
   const still = matchMedia('(prefers-reduced-motion: reduce)');
@@ -71,7 +72,7 @@ export function createReserveDemo(canvas) {
   return {
     show(on, c) {
       if (c) colour = c;
-      canvas.hidden = !on;
+      box.hidden = !on;
       if (on && !raf) { start = performance.now(); raf = requestAnimationFrame(frame); }
       if (!on && raf) { cancelAnimationFrame(raf); raf = 0; }
     },

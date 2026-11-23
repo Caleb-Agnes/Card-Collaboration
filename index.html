@@ -26,7 +26,10 @@
       <div class="panel-head">Tools</div>
       <button class="btn" id="btn-reserve">Reserve an area</button>
       <button class="btn" id="btn-preview">Hide reservations</button>
-      <canvas class="reserve-demo" id="reserve-demo" hidden aria-hidden="true"></canvas>
+      <div class="reserve-demo" id="reserve-demo" hidden>
+        <canvas aria-hidden="true"></canvas>
+        <button class="btn modal-close demo-close" id="demo-close" aria-label="Hide the how-to animation" title="Hide this animation"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button>
+      </div>
       <p class="panel-note" id="tools-note"></p>
     </div>
     <div class="panel">

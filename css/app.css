@@ -161,4 +161,8 @@ dialog.modal::backdrop{background:rgba(0,0,0,.35)}
 .upload-preview{max-width:100%;cursor:crosshair;border:1px solid var(--line);background:repeating-conic-gradient(var(--hover-grey) 0 25%,#fff 0 50%) 0 0/16px 16px}
 .upload-bg .btn{padding:6px 12px;font-size:14px}
 /* How-to animation shown in the Tools panel while reserving (js/ui/reserve-demo.js) */
-.reserve-demo{display:block;width:100%;aspect-ratio:234/140;background:#fff;border:1px solid var(--line)}
+.reserve-demo{position:relative;background:#fff}
+.reserve-demo canvas{display:block;width:100%;aspect-ratio:234/140}
+/* Its close button: the modal close button at two-thirds size */
+.btn.demo-close{position:absolute;top:0;right:0;width:20px;height:20px;margin:3px;border-radius:0 6px 0 0}
+.demo-close svg{width:9px;height:9px}
