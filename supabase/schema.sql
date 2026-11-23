@@ -10,6 +10,13 @@
 --   * When the project is locked, no one but the host can change layers.
 --   * Image files are never overwritten or deleted by the app (U4): there are
 --     no UPDATE or DELETE policies on storage objects.
+--
+-- Hardening against hand-made API requests (anyone signed in can call the API directly):
+--   * Only the columns the app writes can be written (column grants).
+--   * Shapes, transforms, layer order and image paths must be well-formed and in range,
+--     so a bad row can't break the page for everyone.
+--   * Contributors: at most 10 spaces each, 120 MB and 300 files of uploads each, and
+--     files only at layers/{layer id}/v{n}.png. The host is exempt.
 
 -- ---------- Tables ----------
 
@@ -100,11 +107,93 @@ drop trigger if exists layers_before_update on public.layers;
 create trigger layers_before_update before update on public.layers
   for each row execute function public.layers_before_update();
 
+-- ---------- Data checks ----------
+
+-- Is v a JSON number between lo and hi? (never null, so CHECKs can't be skipped)
+create or replace function public.json_num(v jsonb, lo float8, hi float8) returns boolean
+language sql immutable as $$
+  select case when jsonb_typeof(v) = 'number' then (v #>> '{}')::float8 between lo and hi else false end
+$$;
+
+-- {"type":"rect","x","y","w","h"} or {"type":"path","points":[[x,y],...]} with 3-300 points.
+create or replace function public.valid_shape(s jsonb) returns boolean
+language plpgsql immutable as $$
+declare p jsonb;
+begin
+  if s is null then return true; end if;
+  if jsonb_typeof(s) <> 'object' or pg_column_size(s) > 16000 then return false; end if;
+  if s->>'type' = 'rect' then
+    return public.json_num(s->'x', -20000, 20000) and public.json_num(s->'y', -20000, 20000)
+       and public.json_num(s->'w', 0, 20000) and public.json_num(s->'h', 0, 20000);
+  elsif s->>'type' = 'path' then
+    if jsonb_typeof(s->'points') <> 'array' or jsonb_array_length(s->'points') not between 3 and 300 then return false; end if;
+    for p in select * from jsonb_array_elements(s->'points') loop
+      if jsonb_typeof(p) <> 'array' or jsonb_array_length(p) <> 2 then return false; end if;
+      if not (public.json_num(p->0, -20000, 20000) and public.json_num(p->1, -20000, 20000)) then return false; end if;
+    end loop;
+    return true;
+  end if;
+  return false;
+end $$;
+
+-- {"x","y","scale","flip","rotation"} with sensible ranges.
+create or replace function public.valid_transform(t jsonb) returns boolean
+language sql immutable as $$
+  select t is null or (
+    jsonb_typeof(t) = 'object' and pg_column_size(t) < 2000
+    and public.json_num(t->'x', -50000, 50000) and public.json_num(t->'y', -50000, 50000)
+    and public.json_num(t->'scale', 0.0001, 100)
+    and (t->'rotation' is null or public.json_num(t->'rotation', -360, 360))
+    and (t->'flip' is null or jsonb_typeof(t->'flip') = 'boolean')
+  )
+$$;
+
+do $$ begin
+  alter table public.layers drop constraint if exists layers_shape_ok;
+  alter table public.layers drop constraint if exists layers_transform_ok;
+  alter table public.layers drop constraint if exists layers_order_ok;
+  alter table public.layers drop constraint if exists layers_versions_ok;
+  -- NOT VALID: checked on every new write, without failing on rows already there.
+  alter table public.layers add constraint layers_shape_ok check (public.valid_shape(shape)) not valid;
+  alter table public.layers add constraint layers_transform_ok check (public.valid_transform(transform)) not valid;
+  alter table public.layers add constraint layers_order_ok check (stack_order between -1e9 and 1e9) not valid;
+  alter table public.layers add constraint layers_versions_ok check (cardinality(versions) <= 100) not valid;
+end $$;
+
+-- Image paths must be this layer's own files, and contributors get at most 10 spaces.
+create or replace function public.layers_guard() returns trigger
+language plpgsql as $$
+declare
+  v text;
+  pat text := '^layers/' || new.id || '/v[0-9]{1,4}[.]png$';
+  n int;
+begin
+  if new.image_path is not null and new.image_path !~ pat then
+    raise exception 'Image path must be layers/%/v<n>.png', new.id;
+  end if;
+  foreach v in array new.versions loop
+    if v !~ pat then raise exception 'Version paths must be layers/%/v<n>.png', new.id; end if;
+  end loop;
+  if tg_op = 'INSERT' and not public.is_host() then
+    select count(*) into n from public.layers where owner_id = new.owner_id;
+    if n >= 10 then raise exception 'You already have 10 spaces. Delete one first.'; end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists layers_guard on public.layers;
+create trigger layers_guard before insert or update on public.layers
+  for each row execute function public.layers_guard();
+
 -- ---------- Table access ----------
--- Signed-in users reach the tables through the API; RLS below decides which rows.
--- Signed-out visitors (anon) get nothing.
-grant select, insert, update, delete on public.projects, public.profiles, public.layers to authenticated;
-revoke all on public.projects, public.profiles, public.layers from anon;
+-- Signed-in users reach the tables through the API; RLS below decides which rows, and these
+-- grants decide which columns. Signed-out visitors (anon) get nothing.
+revoke all on public.projects, public.profiles, public.layers from anon, authenticated;
+grant select on public.projects, public.profiles, public.layers to authenticated;
+grant update (title, width_px, height_px, dpi, background, locked) on public.projects to authenticated;
+grant insert (project_id, owner_id, label, shape, stack_order) on public.layers to authenticated;
+grant update (owner_id, label, shape, image_path, transform, stack_order, versions) on public.layers to authenticated;
+grant delete on public.layers to authenticated;
 
 -- ---------- Row Level Security ----------
 
@@ -147,13 +236,27 @@ drop policy if exists card_read   on storage.objects;
 drop policy if exists card_insert on storage.objects;
 create policy card_read on storage.objects for select to authenticated
   using (bucket_id = 'card');
+-- Upload totals for the signed-in user (security definer: a policy can't query its own table).
+create or replace function public.my_upload_bytes() returns bigint
+language sql stable security definer set search_path = public, storage as $$
+  select coalesce(sum((metadata->>'size')::bigint), 0) from storage.objects
+  where bucket_id = 'card' and owner_id = auth.uid()::text
+$$;
+create or replace function public.my_upload_count() returns bigint
+language sql stable security definer set search_path = public, storage as $$
+  select count(*) from storage.objects where bucket_id = 'card' and owner_id = auth.uid()::text
+$$;
+
 -- Paths: layers/{layer_id}/v{n}.png (owner or host) and background/v{n}.png (host only).
+-- Contributors are capped at 120 MB and 300 files, so nobody can fill the free 1 GB.
 create policy card_insert on storage.objects for insert to authenticated
   with check (
     bucket_id = 'card' and (
       public.is_host()
       or (
-        (storage.foldername(name))[1] = 'layers'
+        name ~ '^layers/[0-9a-f-]{36}/v[0-9]{1,4}[.]png$'
+        and public.my_upload_bytes() < 120 * 1024 * 1024
+        and public.my_upload_count() < 300
         and exists (
           select 1 from public.layers l
           where l.id::text = (storage.foldername(name))[2]

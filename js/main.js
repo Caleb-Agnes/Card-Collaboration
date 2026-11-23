@@ -139,13 +139,35 @@ function select(id) {
 // ---------- Data loading ----------
 let reloadTimer = 0, reloading = null;
 
+/**
+ * Drop anything malformed from a layer row, so one bad row (e.g. written by hand through the
+ * API) can't break the page for everyone. The database refuses these too (schema.sql).
+ */
+const isNum = v => typeof v === 'number' && Number.isFinite(v);
+function cleanLayer(l) {
+  const s = l.shape, t = l.transform;
+  const shapeOk = !!s && ((s.type === 'rect' && [s.x, s.y, s.w, s.h].every(isNum))
+    || (s.type === 'path' && Array.isArray(s.points) && s.points.length >= 3 && s.points.length <= 300
+        && s.points.every(p => Array.isArray(p) && isNum(p[0]) && isNum(p[1]))));
+  const tOk = !!t && [t.x, t.y, t.scale, t.rotation ?? 0].every(isNum) && t.scale > 0 && t.scale <= 100;
+  return {
+    ...l,
+    label: String(l.label ?? '').slice(0, 80),
+    shape: shapeOk ? s : null,
+    transform: tOk ? { ...t, flip: t.flip === true, rotation: t.rotation ?? 0 } : null,
+    stack_order: isNum(l.stack_order) ? l.stack_order : 0,
+    versions: Array.isArray(l.versions) ? l.versions : [],
+  };
+}
+
 /** Fetch everything and redraw. Called on sign-in and whenever anyone changes something (C5). */
 async function reload() {
   if (!state.me) return;
   if (reloading) return reloading.then(() => reload());
   reloading = (async () => {
     try {
-      const { project, profiles, layers } = await store.loadAll();
+      const loaded = await store.loadAll();
+      const { project, profiles } = loaded, layers = loaded.layers.map(cleanLayer);
       Object.assign(state, { project, profiles, layers });
       if (state.selectedId && !layers.some(l => l.id === state.selectedId && canEdit(l))) state.selectedId = null;
       loadImages();
@@ -440,6 +462,10 @@ async function uploadArt(layer, { canvas, transform }) {
     catch (e) {
       // Someone (or another tab) already used this version number: take the next one.
       if (tries < 5 && /exists|duplicate|409/i.test(e.message || e.statusCode || '')) { n++; continue; }
+      // Refused although the layer is yours and the card is unlocked: most likely the upload limit.
+      if (/row-level security|violates|403|unauthorized/i.test(e.message || e.statusCode || '') && canEdit(layer) && !isHost()) {
+        throw new Error('The server refused this upload. You may have reached your upload limit (120 MB in total), so ask Caleb.');
+      }
       throw e;
     }
   }
