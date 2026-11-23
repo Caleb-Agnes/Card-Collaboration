@@ -11,6 +11,7 @@
   --teal:#067BC2;     /* slider knob */
   --sky:#84BCDA;      /* layer rows, Cancel buttons, slider track */
   --amber:#F8D945;    /* selected layer, modal close button */
+  --cherry-dark:#E92532; /* help (?) button: cherry darkened by the same step as sky -> teal (app addition) */
   --page:#FEF3F4;     /* page background (Cherry Blossom 15% on white) */
   --line:#000;        /* all borders */
   --divider:rgba(0,0,0,.15); /* faint lines under headings */
@@ -166,3 +167,7 @@ dialog.modal::backdrop{background:rgba(0,0,0,.35)}
 /* Its close button: the modal close button at two-thirds size */
 .btn.demo-close{position:absolute;top:0;right:0;width:20px;height:20px;margin:3px;border-radius:0 6px 0 0}
 .demo-close svg{width:9px;height:9px}
+/* Exit reservation with its ? help button beside it */
+.btn-row{display:flex;gap:2px}
+.btn-row .btn:first-child{flex:1}
+.panel .btn.help{flex:none;width:34px;padding:7px 0;background-color:var(--cherry-dark);font-weight:600}

@@ -63,14 +63,16 @@ const view = new CanvasView($('canvas-frame'), $('canvas'), {
 
 // ---------- Rendering ----------
 const reserveDemo = createReserveDemo($('reserve-demo'));
-// The X hides the animation for good on this device (the text hint stays).
+// The X hides the how-to (animation and text) on this device; the ? beside Exit reservation brings it back.
 let demoDismissed = false;
 try { demoDismissed = localStorage.getItem('collab-card-hide-demo') === '1'; } catch {}
-$('demo-close').addEventListener('click', () => {
-  demoDismissed = true;
-  try { localStorage.setItem('collab-card-hide-demo', '1'); } catch {}
+function setHelpHidden(hidden) {
+  demoDismissed = hidden;
+  try { localStorage.setItem('collab-card-hide-demo', hidden ? '1' : '0'); } catch {}
   render();
-});
+}
+$('demo-close').addEventListener('click', () => setHelpHidden(true));
+$('btn-help').addEventListener('click', () => setHelpHidden(!demoDismissed));
 
 function renderAccount() {
   const box = $('acct-box');
@@ -108,15 +110,16 @@ function render() {
   $('btn-reserve').textContent = reserving ? 'Exit reservation' : 'Reserve an area';
   $('btn-preview').textContent = state.showGuides ? 'Hide reservations' : 'Show reservations';
   $('tools-note').textContent = !state.me ? 'Sign in to see the card.'
-    : view.mode === 'reserve' ? 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.'
+    : view.mode === 'reserve' ? (demoDismissed ? '' : 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.')
     : state.project.locked ? (isHost() ? 'Editing is locked for everyone else.' : 'The card is locked, so it can’t be changed.') : '';
+  $('btn-help').hidden = !reserving;
   reserveDemo.show(view.mode === 'reserve' && !demoDismissed, state.me ? styleFor(state.me.id).colour : undefined);
   $('host-panel').hidden = !isHost();
   $('btn-lock').textContent = state.project.locked ? 'Unlock editing' : 'Lock editing';
   // While reserving, every other button is off until the shape is finished or reserving is exited.
   if (reserving) {
     document.querySelectorAll('.topbar button, .tools button').forEach(b => {
-      if (b.id !== 'btn-reserve' && b.id !== 'demo-close' && !b.disabled) { b.disabled = true; b.dataset.reserveOff = ''; }
+      if (!['btn-reserve', 'btn-help', 'demo-close'].includes(b.id) && !b.disabled) { b.disabled = true; b.dataset.reserveOff = ''; }
     });
   }
   view.redraw();
