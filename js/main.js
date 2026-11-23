@@ -55,7 +55,6 @@ const view = new CanvasView($('canvas-frame'), $('canvas'), {
     ownerStyle: styleFor,
     meStyle: state.me ? styleFor(state.me.id) : profileByName('?'),
   }),
-  onSelect: id => select(id),
   onReserve: shape => startReserve(shape),
   onCommit: (id, patch) => saveLayer(id, patch),
   onZoom: (z, anchor) => zoom.set(z, anchor),
@@ -90,11 +89,10 @@ function render() {
   for (const id of ['btn-download', 'btn-upload', 'btn-rename', 'btn-delete']) $(id).disabled = !editable;
   $('btn-flip').disabled = !(editable && sel.image_path);
   const cantReserve = !state.me || (state.project.locked && !isHost());
-  $('btn-reserve').disabled = $('btn-reserve-poly').disabled = cantReserve;
+  $('btn-reserve').disabled = cantReserve;
   $('btn-preview').textContent = state.showGuides ? 'Hide reservations' : 'Show reservations';
   $('tools-note').textContent = !state.me ? 'Sign in to see the card.'
-    : view.mode === 'reserve' ? 'Drag on the canvas to draw your space. Esc cancels.'
-    : view.mode === 'reserve-poly' ? 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.'
+    : view.mode === 'reserve' ? 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.'
     : state.project.locked ? (isHost() ? 'Editing is locked for everyone else.' : 'The card is locked, so it can’t be changed.') : '';
   $('host-panel').hidden = !isHost();
   $('btn-lock').textContent = state.project.locked ? 'Unlock editing' : 'Lock editing';
@@ -461,7 +459,6 @@ const toggleReserve = mode => {
   render();
 };
 $('btn-reserve').addEventListener('click', () => toggleReserve('reserve'));
-$('btn-reserve-poly').addEventListener('click', () => toggleReserve('reserve-poly'));
 $('btn-preview').addEventListener('click', () => { state.showGuides = !state.showGuides; render(); });
 
 const needsLayer = (id, modal) => $(id).addEventListener('click', () => { if (selectedLayer()) openModal(modal); });
@@ -475,7 +472,7 @@ let nudgeTimer = 0;
 document.addEventListener('keydown', e => {
   if (document.querySelector('dialog[open]') || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
   if (e.key === 'Escape' && view.mode !== 'idle') { view.setMode('idle'); render(); return; }
-  if (e.key === 'Backspace' && view.mode === 'reserve-poly') { e.preventDefault(); view.undoPoint(); return; }
+  if (e.key === 'Backspace' && view.mode === 'reserve') { e.preventDefault(); view.undoPoint(); return; }
   const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
   const l = selectedLayer();
   if (!dir || !l || !canEdit(l)) return;
