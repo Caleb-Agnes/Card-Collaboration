@@ -14,7 +14,7 @@ export const APPS = {
   'MS Paint / other': 'flat',
 };
 
-/** Name of the empty layer people draw on. T6 finds it again by this name. */
+/** Name of the empty layer people draw on. It only tells people which layer is theirs; they can rename it. */
 export const myLayerName = label => `My character - ${label}`;
 
 /**

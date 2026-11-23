@@ -14,7 +14,6 @@
 
 <header class="topbar">
   <h1 class="page-title" id="project-title">Collab Card</h1>
-  <!-- PROVISIONAL "Switch" button: open question 1 in QUESTIONS.md -->
   <div class="acct-wrap">
     <div class="acct-box" id="acct-box" aria-label="Signed in as" hidden></div>
     <button class="btn" id="btn-switch">Sign in</button>
@@ -26,7 +25,8 @@
     <div class="panel">
       <div class="panel-head">Tools</div>
       <button class="btn" id="btn-reserve">Reserve an area</button>
-      <button class="btn" id="btn-preview">Preview final image</button>
+      <button class="btn" id="btn-reserve-poly">Reserve a custom shape</button>
+      <button class="btn" id="btn-preview">Hide reservations</button>
       <p class="panel-note" id="tools-note"></p>
     </div>
     <div class="panel">
@@ -34,13 +34,10 @@
       <button class="btn" id="btn-download">Download template</button>
       <button class="btn" id="btn-upload">Upload image</button>
       <button class="btn" id="btn-rename">Edit layer name</button>
-      <!-- PROVISIONAL: U3 / L3 controls, open question 4 -->
       <button class="btn" id="btn-flip">Flip horizontally</button>
-      <button class="btn" id="btn-up">Move up</button>
-      <button class="btn" id="btn-down">Move down</button>
       <button class="btn" id="btn-delete">Delete layer</button>
     </div>
-    <!-- PROVISIONAL host-only box: open question 5 -->
+    <!-- Host-only box -->
     <div class="panel" id="host-panel" hidden>
       <div class="panel-head">Host</div>
       <button class="btn" id="btn-setup">Canvas setup</button>
@@ -66,7 +63,7 @@
 
   <div class="panel" id="layers">
     <div class="panel-head">Layers</div>
-    <!-- Rows rendered by js/ui/layers-panel.js. Top of list = front of the stack (open question 7). -->
+    <!-- Rows rendered by js/ui/layers-panel.js. Top of list = front of the stack. -->
   </div>
 </div>
 
@@ -110,8 +107,14 @@
 <dialog class="modal" id="modal-upload" aria-label="Upload image">
   <div class="modal-head"><span class="modal-title">Upload image</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
   <div class="modal-body">
-    <div class="dropzone" id="upload-drop">Drop your file here<br><input type="file" id="upload-file" accept=".psd,.ora,.png,.jpg,.jpeg"></div>
-    <p class="modal-note">Your layered template file or a PNG. Uploading again replaces your art; the old version is kept.</p>
+    <div class="dropzone" id="upload-drop">Drop your file here<br><input type="file" id="upload-file" accept=".png,.jpg,.jpeg"></div>
+    <p class="modal-note">A PNG of just your character (hide the other template layers before exporting). A JPG works too. Uploading again replaces your art; the old version is kept.</p>
+    <div class="upload-bg" id="upload-bg" hidden>
+      <label class="check"><input type="checkbox" id="upload-bg-on" checked> Make the background see-through</label>
+      <canvas class="upload-preview" id="upload-preview" title="Click an area to make it see-through"></canvas>
+      <p class="modal-note">This image has no transparent parts, so its background colour around the edges is removed. Click any other area in the preview (say, a gap under an arm) to remove that too.</p>
+      <button class="btn sky" id="upload-bg-reset" type="button" hidden>Undo my clicks</button>
+    </div>
     <p class="modal-note" id="upload-versions"></p>
     <div class="modal-warnings" id="upload-warnings" role="alert"></div>
     <p class="modal-error" id="upload-error" role="alert"></p>

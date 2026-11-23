@@ -10,7 +10,7 @@ import { notice } from './ui/notice.js';
 import { CanvasView } from './canvas/view.js';
 import { layerBounds, overlapFraction, shapeBounds, canvasToBlob, makeCanvas } from './canvas/draw.js';
 import { APPS, buildTemplate, saveBlob } from './templates.js';
-import { processUpload } from './upload.js';
+import { readImage, findBackground, removeBackground, placeUpload } from './upload.js';
 import { exportPng, exportPdf, exportBackup } from './export.js';
 
 const $ = id => document.getElementById(id);
@@ -22,7 +22,7 @@ const state = {
   layers: [],
   me: null,            // signed-in profile row
   selectedId: null,
-  showGuides: true,    // false = "Preview final image" (C4)
+  showGuides: true,    // false = reservations hidden, i.e. the final image (C4)
   images: new Map(),   // storage path -> ImageBitmap (loaded)
   thumbs: new Map(),   // storage path -> data URL
   bgImage: null,
@@ -87,18 +87,15 @@ function render() {
 
   const sel = selectedLayer();
   const editable = sel && canEdit(sel);
-  for (const id of ['btn-download', 'btn-upload', 'btn-rename', 'btn-delete', 'btn-up', 'btn-down']) $(id).disabled = !editable;
+  for (const id of ['btn-download', 'btn-upload', 'btn-rename', 'btn-delete']) $(id).disabled = !editable;
   $('btn-flip').disabled = !(editable && sel.image_path);
-  if (editable) {
-    const d = layersDesc(), i = d.findIndex(l => l.id === sel.id);
-    $('btn-up').disabled = i === 0;
-    $('btn-down').disabled = i === d.length - 1;
-  }
-  $('btn-reserve').disabled = !state.me || (state.project.locked && !isHost());
-  $('btn-preview').textContent = state.showGuides ? 'Preview final image' : 'Show spaces and labels';
+  const cantReserve = !state.me || (state.project.locked && !isHost());
+  $('btn-reserve').disabled = $('btn-reserve-poly').disabled = cantReserve;
+  $('btn-preview').textContent = state.showGuides ? 'Hide reservations' : 'Show reservations';
   $('tools-note').textContent = !state.me ? 'Sign in to see the card.'
-    : state.project.locked ? (isHost() ? 'Editing is locked for everyone else.' : 'The card is locked, so it can’t be changed.')
-    : view.mode === 'reserve' ? 'Drag on the canvas to draw your space. Esc cancels.' : '';
+    : view.mode === 'reserve' ? 'Drag on the canvas to draw your space. Esc cancels.'
+    : view.mode === 'reserve-poly' ? 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.'
+    : state.project.locked ? (isHost() ? 'Editing is locked for everyone else.' : 'The card is locked, so it can’t be changed.') : '';
   $('host-panel').hidden = !isHost();
   $('btn-lock').textContent = state.project.locked ? 'Unlock editing' : 'Lock editing';
   view.redraw();
@@ -188,7 +185,14 @@ initModals();
 
 // Sign in (P2-P5)
 const signinName = createDropdown($('signin-name'), { profiles: true, placeholder: 'Choose your name…' });
-onModalOpen('modal-signin', () => {
+// While nobody is signed in the sign-in box can't be closed: no X, and Escape and the backdrop do nothing.
+const signinRequired = () => !state.me;
+$('modal-signin').addEventListener('cancel', e => { if (signinRequired()) e.preventDefault(); });
+// Some browsers let a second Escape close a dialog anyway, so reopen it.
+$('modal-signin').addEventListener('close', () => { if (signinRequired()) $('modal-signin').showModal(); });
+onModalOpen('modal-signin', dlg => {
+  dlg.querySelector('.modal-close').hidden = signinRequired();
+  dlg.dataset.required = signinRequired() ? 'true' : '';
   signinName.setValue(null);
   $('signin-password').value = '';
   $('signin-error').textContent = '';
@@ -250,9 +254,9 @@ let lastApp = null;
 try { lastApp = localStorage.getItem('collab-card-app'); } catch {}
 const appNames = Object.keys(APPS);
 const formatNote = app => ({
-  psd: 'You’ll get a layered PSD file.',
-  ora: 'You’ll get a layered OpenRaster (.ora) file.',
-  flat: 'You’ll get a zip with a faded reference PNG and a blank PNG to draw on.',
+  psd: 'You’ll get a layered PSD file. Draw on the “My character” layer, then hide the other layers and export a PNG to upload.',
+  ora: 'You’ll get a layered OpenRaster (.ora) file. Draw on the “My character” layer, then hide the other layers and export a PNG to upload.',
+  flat: 'You’ll get a zip with a faded reference PNG and a blank PNG to draw on and upload.',
 }[APPS[app]]);
 const downloadApp = createDropdown($('download-app'), {
   options: appNames,
@@ -282,8 +286,9 @@ $('download-go').addEventListener('click', async () => {
   } finally { btn.disabled = false; btn.textContent = 'Download'; }
 });
 
-// Upload (U1-U5, T6)
-let uploadPrepared = null;  // result of processUpload awaiting confirmation of warnings
+// Upload (U1-U5, T8)
+let uploadSrc = null;       // Promise of { canvas, opaque, jpeg, colour, points, result } for the chosen file
+let uploadPrepared = null;  // placeUpload() result awaiting confirmation of warnings
 function resetUploadMessages() {
   uploadPrepared = null;
   $('upload-warnings').replaceChildren();
@@ -292,12 +297,49 @@ function resetUploadMessages() {
 }
 onModalOpen('modal-upload', () => {
   $('upload-file').value = '';
+  uploadSrc = null;
+  $('upload-bg').hidden = true;
   resetUploadMessages();
   const l = selectedLayer();
   const n = (l?.versions?.length || 0) + (l?.image_path ? 1 : 0);
   $('upload-versions').textContent = n ? `${n} version${n > 1 ? 's' : ''} uploaded so far, all kept on the server.` : '';
 });
-$('upload-file').addEventListener('change', resetUploadMessages);
+
+/** Read the chosen file straight away, so an image with no transparency can offer background removal (T8). */
+function chooseUpload(file) {
+  resetUploadMessages();
+  $('upload-bg').hidden = true;
+  if (!file) { uploadSrc = null; return; }
+  uploadSrc = readImage(file).then(src => {
+    const u = { ...src, points: [], colour: null, result: null };
+    if (u.opaque) {
+      u.colour = findBackground(u.canvas);
+      $('upload-bg-on').checked = true;
+      $('upload-bg').hidden = false;
+      refreshBackground(u);
+    }
+    return u;
+  });
+  uploadSrc.catch(e => { $('upload-error').textContent = e.message || String(e); });
+}
+
+/** Recompute the see-through version and draw the preview. */
+function refreshBackground(u) {
+  const on = $('upload-bg-on').checked;
+  u.result = on ? removeBackground(u.canvas, { colour: u.colour, points: u.points }) : null;
+  $('upload-bg-reset').hidden = !(on && u.points.length);
+  const pv = $('upload-preview'), img = u.result || u.canvas;
+  const k = Math.min(1, 360 / img.width, 220 / img.height);
+  pv.width = Math.max(1, Math.round(img.width * k));
+  pv.height = Math.max(1, Math.round(img.height * k));
+  const g = pv.getContext('2d');
+  g.clearRect(0, 0, pv.width, pv.height);
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, pv.width, pv.height);
+  resetUploadMessages();
+}
+
+$('upload-file').addEventListener('change', () => chooseUpload($('upload-file').files[0]));
 const drop = $('upload-drop');
 drop.addEventListener('dragover', e => { e.preventDefault(); });
 drop.addEventListener('drop', e => {
@@ -306,26 +348,35 @@ drop.addEventListener('drop', e => {
   const dt = new DataTransfer();
   dt.items.add(e.dataTransfer.files[0]);
   $('upload-file').files = dt.files;
-  resetUploadMessages();
+  chooseUpload(dt.files[0]);
 });
+$('upload-bg-on').addEventListener('change', async () => { const u = await uploadSrc; if (u) refreshBackground(u); });
+$('upload-bg-reset').addEventListener('click', async () => { const u = await uploadSrc; if (u) { u.points = []; refreshBackground(u); } });
+$('upload-preview').addEventListener('click', async e => {
+  const u = await uploadSrc;
+  if (!u || !$('upload-bg-on').checked) return;
+  const r = $('upload-preview').getBoundingClientRect();
+  u.points.push({ x: (e.clientX - r.left) / r.width * u.canvas.width, y: (e.clientY - r.top) / r.height * u.canvas.height });
+  refreshBackground(u);
+});
+
 $('upload-go').addEventListener('click', async () => {
   const layer = selectedLayer();
-  const file = $('upload-file').files[0];
   if (!layer) return;
-  if (!file) { $('upload-error').textContent = 'Choose a file first.'; return; }
+  if (!uploadSrc) { $('upload-error').textContent = 'Choose a file first.'; return; }
   const btn = $('upload-go');
   btn.disabled = true;
   try {
     if (!uploadPrepared) {
       btn.textContent = 'Reading…';
-      const prepared = await processUpload(file, { project: state.project, layer });
-      if (prepared.warnings.length) {
-        uploadPrepared = prepared;
-        $('upload-warnings').replaceChildren(...prepared.warnings.map(w => Object.assign(document.createElement('p'), { textContent: '⚠ ' + w })));
+      const u = await uploadSrc;
+      const cleaned = u.opaque && $('upload-bg-on').checked;
+      uploadPrepared = placeUpload(cleaned ? u.result : u.canvas, { project: state.project, layer, opaque: u.opaque && !cleaned });
+      if (uploadPrepared.warnings.length) {
+        $('upload-warnings').replaceChildren(...uploadPrepared.warnings.map(w => Object.assign(document.createElement('p'), { textContent: '⚠ ' + w })));
         btn.textContent = 'Upload anyway';
         return;
       }
-      uploadPrepared = prepared;
     }
     btn.textContent = 'Uploading…';
     await uploadArt(layer, uploadPrepared);
@@ -384,8 +435,8 @@ $('btn-flip').addEventListener('click', () => {
   if (l?.transform) saveLayer(l.id, { transform: { ...l.transform, flip: !l.transform.flip } });
 });
 
-// Move up / down (L3). Only the moved layer's stack_order changes: it takes a value between
-// its new neighbours, so a contributor never has to edit anyone else's row.
+// Reorder (L3, host drags rows in the Layers panel). Only the moved layer's stack_order
+// changes: it takes a value between its new neighbours, so no other row is touched.
 function orderForIndex(desc, index) {
   // desc excludes the moving layer; index is where it goes (0 = front).
   const above = desc[index - 1], below = desc[index];
@@ -394,25 +445,23 @@ function orderForIndex(desc, index) {
   if (!below) return above.stack_order - 1;
   return (above.stack_order + below.stack_order) / 2;
 }
-async function moveToIndex(id, index) {
+/** Move a layer so it ends up at position `to` in the list (0 = front). */
+async function moveToIndex(id, to) {
   const d = layersDesc();
   const from = d.findIndex(l => l.id === id);
-  if (from < 0) return;
-  const rest = d.filter(l => l.id !== id);
-  const to = index > from ? index - 1 : index;
-  if (to === from) return;
-  await saveLayer(id, { stack_order: orderForIndex(rest, to) });
+  if (from < 0 || to === from) return;
+  await saveLayer(id, { stack_order: orderForIndex(d.filter(l => l.id !== id), to) });
 }
-$('btn-up').addEventListener('click', () => { const l = selectedLayer(); if (l) moveToIndex(l.id, layersDesc().findIndex(x => x.id === l.id) - 1); });
-$('btn-down').addEventListener('click', () => { const l = selectedLayer(); if (l) moveToIndex(l.id, layersDesc().findIndex(x => x.id === l.id) + 2); });
 
 // ---------- Tools ----------
 $('btn-switch').addEventListener('click', () => openModal('modal-signin'));
-$('btn-reserve').addEventListener('click', () => {
-  view.setMode(view.mode === 'reserve' ? 'idle' : 'reserve');
+const toggleReserve = mode => {
+  view.setMode(view.mode === mode ? 'idle' : mode);
   if (!state.showGuides) state.showGuides = true;
   render();
-});
+};
+$('btn-reserve').addEventListener('click', () => toggleReserve('reserve'));
+$('btn-reserve-poly').addEventListener('click', () => toggleReserve('reserve-poly'));
 $('btn-preview').addEventListener('click', () => { state.showGuides = !state.showGuides; render(); });
 
 const needsLayer = (id, modal) => $(id).addEventListener('click', () => { if (selectedLayer()) openModal(modal); });
@@ -420,11 +469,13 @@ needsLayer('btn-download', 'modal-download');
 needsLayer('btn-upload', 'modal-upload');
 needsLayer('btn-rename', 'modal-rename');
 
-// Keyboard: Esc cancels reserving; arrow keys nudge the selected layer (Shift = 10 px).
+// Keyboard: Esc cancels reserving, Backspace removes the last polygon point;
+// arrow keys nudge the selected layer (Shift = 10 px).
 let nudgeTimer = 0;
 document.addEventListener('keydown', e => {
   if (document.querySelector('dialog[open]') || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
-  if (e.key === 'Escape' && view.mode === 'reserve') { view.setMode('idle'); render(); return; }
+  if (e.key === 'Escape' && view.mode !== 'idle') { view.setMode('idle'); render(); return; }
+  if (e.key === 'Backspace' && view.mode === 'reserve-poly') { e.preventDefault(); view.undoPoint(); return; }
   const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
   const l = selectedLayer();
   if (!dir || !l || !canEdit(l)) return;
@@ -525,6 +576,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sche
   render();
   try {
     store = await createStore();
+    if (store.demo) window.__card = state;  // demo mode only: lets the automated tests inspect state
     state.me = await store.currentProfile();
   } catch (e) {
     console.error(e);

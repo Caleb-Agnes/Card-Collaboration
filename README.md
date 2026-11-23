@@ -17,10 +17,10 @@ Plain HTML, CSS and ES modules, with no build step. Libraries load from jsDelivr
 | [css/app.css](css/app.css) | Signed-off styles from the design reference, plus a marked "App additions" section |
 | [js/main.js](js/main.js) | App state and wiring for every button and modal |
 | [js/store/](js/store/) | Data layer: `supabase-store.js` (real) and `demo-store.js` (in memory, used when `config.js` is empty) |
-| [js/canvas/view.js](js/canvas/view.js) | On-screen canvas: zoom, pan, select, move, scale, claimed shapes and labels |
+| [js/canvas/view.js](js/canvas/view.js) | On-screen canvas: zoom, pan, select, move, scale, rotate, rectangle and polygon reserving, labels |
 | [js/canvas/draw.js](js/canvas/draw.js) | Drawing maths shared by the view, templates and exports |
 | [js/templates.js](js/templates.js) | PSD, OpenRaster and flat PNG template builders |
-| [js/upload.js](js/upload.js) | Reads PNG/JPG/PSD/ORA uploads, finds the "My character" layer, trims, places |
+| [js/upload.js](js/upload.js) | Reads PNG/JPG uploads, removes a flat background (T8), trims, places |
 | [js/export.js](js/export.js) | Full-size PNG, A5 PDF and backup zip |
 | [supabase/schema.sql](supabase/schema.sql) | Tables, Row Level Security, storage bucket, realtime |
 | [supabase/seed.sql](supabase/seed.sql) | The project row and the 7 profiles |

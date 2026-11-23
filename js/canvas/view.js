@@ -6,16 +6,26 @@
 // This keeps memory flat at x10 zoom instead of allocating a giant bitmap.
 //
 // Interaction (desktop mouse/pen):
-//   - click a layer you can edit to select it; drag it to move; drag the corner square to scale
+//   - click a layer you can edit to select it; drag it to move
+//   - drag any corner square to scale (proportions always locked); drag the round handle
+//     above uploaded art to rotate it (Shift snaps to 15 degrees)
 //   - drag on empty space to pan; ctrl + wheel to zoom at the pointer
-//   - "Reserve an area" mode: drag out a rectangle
+//   - "reserve" mode: drag out a rectangle
+//   - "reserve-poly" mode: click to place corners, click the first point to close the shape;
+//     a point whose line would cross the shape is refused
 // Touch keeps native scrolling for phone viewing, except while reserving.
 import {
-  drawLayerImage, drawBackground, layerBounds, traceShape, moveShape, resizeShape,
+  drawLayerImage, drawBackground, layerBounds, layerFrame, frameCorners, layerContains,
+  traceShape, moveShape, resizeShape, shapeBounds, segmentsTouch,
 } from './draw.js';
 
 const HANDLE = 10;      // corner handle size, screen px
+const ROT_OFFSET = 24;  // distance of the rotate handle above the top edge, screen px
+const ROT_R = 6;        // rotate handle radius, screen px
+const CLOSE_R = 10;     // how close to the first point a click closes the polygon, screen px
 const MIN_SIZE = 20;    // smallest reservable rectangle, canvas px
+const MIN_ART = 8;      // smallest art can be scaled to, canvas px
+const CORNER_CURSORS = ['nwse-resize', 'nesw-resize', 'nwse-resize', 'nesw-resize'];
 
 export class CanvasView {
   /**
@@ -28,10 +38,11 @@ export class CanvasView {
     this.content = content;
     this.hooks = hooks;
     this.zoom = 1;
-    this.mode = 'idle';        // 'idle' | 'reserve'
+    this.mode = 'idle';        // 'idle' | 'reserve' | 'reserve-poly'
     this.drag = null;          // active drag state
     this.override = null;      // { id, layer } live preview of a layer while dragging
     this.draft = null;         // reserve rectangle in progress
+    this.poly = null;          // { points, hover } polygon in progress
 
     this.canvas = document.createElement('canvas');
     Object.assign(this.canvas.style, { position: 'sticky', top: '0', left: '0', display: 'block', touchAction: 'pan-x pan-y pinch-zoom' });
@@ -44,6 +55,7 @@ export class CanvasView {
     this.canvas.addEventListener('pointermove', e => this.#move(e));
     this.canvas.addEventListener('pointerup', e => this.#up(e));
     this.canvas.addEventListener('pointercancel', () => this.#cancel());
+    this.canvas.addEventListener('pointerleave', () => { if (this.poly) { this.poly.hover = null; this.redraw(); } });
     frame.addEventListener('wheel', e => this.#wheel(e), { passive: false });
   }
 
@@ -89,9 +101,15 @@ export class CanvasView {
   setMode(mode) {
     this.mode = mode;
     this.draft = null;
-    this.canvas.style.cursor = mode === 'reserve' ? 'crosshair' : '';
-    this.canvas.style.touchAction = mode === 'reserve' ? 'none' : 'pan-x pan-y pinch-zoom';
+    this.poly = mode === 'reserve-poly' ? { points: [], hover: null } : null;
+    this.canvas.style.cursor = mode === 'idle' ? '' : 'crosshair';
+    this.canvas.style.touchAction = mode === 'idle' ? 'pan-x pan-y pinch-zoom' : 'none';
     this.redraw();
+  }
+
+  /** Remove the last polygon point (Backspace). */
+  undoPoint() {
+    if (this.poly?.points.length) { this.poly.points.pop(); this.redraw(); }
   }
 
   // ---------- Rendering ----------
@@ -152,23 +170,8 @@ export class CanvasView {
       }
 
       const sel = layers.find(l => l.id === scene.selectedId);
-      if (sel) {
-        const b = layerBounds(sel, scene.images.get(sel.image_path));
-        if (b) {
-          const r = toScreen(b);
-          ctx.save();
-          ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
-          ctx.strokeRect(Math.round(r.x) + .5, Math.round(r.y) + .5, Math.round(r.w), Math.round(r.h));
-          ctx.strokeStyle = getCss('--amber'); ctx.lineDashOffset = 5;
-          ctx.strokeRect(Math.round(r.x) + .5, Math.round(r.y) + .5, Math.round(r.w), Math.round(r.h));
-          ctx.restore();
-          if (scene.editableIds.has(sel.id)) {
-            const hx = r.x + r.w - HANDLE / 2, hy = r.y + r.h - HANDLE / 2;
-            ctx.fillStyle = '#fff'; ctx.fillRect(hx, hy, HANDLE, HANDLE);
-            ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(Math.round(hx) + .5, Math.round(hy) + .5, HANDLE - 1, HANDLE - 1);
-          }
-        }
-      }
+      const f = sel && layerFrame(sel, scene.images.get(sel.image_path));
+      if (f) this.#renderSelection(ctx, sel, f, scene.editableIds.has(sel.id), s, sx, sy);
     }
 
     if (this.draft) {
@@ -179,6 +182,65 @@ export class CanvasView {
       ctx.globalAlpha = 1; ctx.strokeStyle = me.colour; ctx.lineWidth = 2; ctx.strokeRect(r.x, r.y, r.w, r.h);
       ctx.restore();
     }
+
+    if (this.poly?.points.length) this.#renderPoly(ctx, scene.meStyle, s, sx, sy);
+  }
+
+  /** Dashed black/amber outline (rotated with the art), corner squares and, for art, the rotate handle. */
+  #renderSelection(ctx, sel, f, editable, s, sx, sy) {
+    const pts = frameCorners(f).map(c => ({ x: c.x * s - sx, y: c.y * s - sy }));
+    const snap = f.angle ? v => v : v => Math.round(v) + .5;
+    ctx.save();
+    ctx.beginPath();
+    pts.forEach((q, i) => (i ? ctx.lineTo(snap(q.x), snap(q.y)) : ctx.moveTo(snap(q.x), snap(q.y))));
+    ctx.closePath();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.stroke();
+    ctx.strokeStyle = getCss('--amber'); ctx.lineDashOffset = 5; ctx.stroke();
+    ctx.restore();
+    if (!editable) return;
+    ctx.save();
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+    if (sel.image_path && sel.transform) {
+      const r = this.#rotHandle(f, s);
+      const top = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const hx = r.x * s - sx, hy = r.y * s - sy;
+      ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(hx, hy); ctx.stroke();
+      ctx.beginPath(); ctx.arc(hx, hy, ROT_R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    for (const q of pts) {
+      const hx = Math.round(q.x - HANDLE / 2), hy = Math.round(q.y - HANDLE / 2);
+      ctx.fillRect(hx, hy, HANDLE, HANDLE);
+      ctx.strokeRect(hx + .5, hy + .5, HANDLE - 1, HANDLE - 1);
+    }
+    ctx.restore();
+  }
+
+  /** Polygon in progress: placed lines, a line to the pointer (dashed black if it would cross), and the start point. */
+  #renderPoly(ctx, me, s, sx, sy) {
+    const { points, hover } = this.poly;
+    const sc = ([x, y]) => [x * s - sx, y * s - sy];
+    const pts = points.map(sc);
+    const closing = hover && this.#nearStart(hover, s);
+    ctx.save();
+    ctx.lineWidth = 2; ctx.strokeStyle = me.colour; ctx.fillStyle = me.colour;
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    if (pts.length >= 3) { ctx.globalAlpha = .25; ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.stroke();
+    if (hover) {
+      const ok = closing ? canClose(points) : canAdd(points, [hover.x, hover.y]);
+      const [lx, ly] = pts[pts.length - 1], [hx, hy] = closing ? pts[0] : sc([hover.x, hover.y]);
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(hx, hy);
+      if (!ok) { ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); }
+      ctx.stroke();
+      ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = me.colour;
+    }
+    for (const [x, y] of pts.slice(1)) ctx.fillRect(x - 3, y - 3, 6, 6);
+    const [fx, fy] = pts[0];
+    ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = closing && canClose(points) ? me.colour : '#fff';
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
   }
 
   /** Owner-coloured pill with "Name · Label", matching the layer-row badge. */
@@ -197,20 +259,38 @@ export class CanvasView {
     ctx.restore();
   }
 
-  // ---------- Pointer handling ----------
+  // ---------- Hit testing ----------
 
+  #nearStart(p, s = this.scale) {
+    const pts = this.poly?.points;
+    if (!pts || pts.length < 3) return false;
+    return Math.hypot(p.x - pts[0][0], p.y - pts[0][1]) * s <= CLOSE_R;
+  }
+
+  /** Rotate handle position in canvas px: above the middle of the top edge, in the art's own "up". */
+  #rotHandle(f, s = this.scale) {
+    const d = f.h / 2 + ROT_OFFSET / s;
+    return { x: f.cx + Math.sin(f.angle) * d, y: f.cy - Math.cos(f.angle) * d };
+  }
+
+  /** Handle under the point on the selected editable layer: { kind: 'scale', corner } or { kind: 'rotate' }. */
   #hitHandle(scene, p) {
     const sel = scene.layersAsc.find(l => l.id === scene.selectedId);
     if (!sel || !scene.editableIds.has(sel.id)) return null;
-    const b = layerBounds(sel, scene.images.get(sel.image_path));
-    if (!b) return null;
-    const tol = HANDLE / this.scale;
-    return Math.abs(p.x - (b.x + b.w)) <= tol && Math.abs(p.y - (b.y + b.h)) <= tol ? sel : null;
+    const f = layerFrame(sel, scene.images.get(sel.image_path));
+    if (!f) return null;
+    const s = this.scale, tol = HANDLE / s;
+    if (sel.image_path && sel.transform) {
+      const r = this.#rotHandle(f, s);
+      if (Math.hypot(p.x - r.x, p.y - r.y) <= (ROT_R + 3) / s) return { kind: 'rotate', layer: sel, f };
+    }
+    const corner = frameCorners(f).findIndex(c => Math.abs(p.x - c.x) <= tol && Math.abs(p.y - c.y) <= tol);
+    return corner >= 0 ? { kind: 'scale', corner, layer: sel, f } : null;
   }
 
   /** Top-most editable layer under the point (selected layer wins if under it). */
   #hitLayer(scene, p) {
-    const inside = l => { const b = layerBounds(l, scene.images.get(l.image_path)); return b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h; };
+    const inside = l => layerContains(l, scene.images.get(l.image_path), p);
     const sel = scene.layersAsc.find(l => l.id === scene.selectedId);
     if (sel && scene.editableIds.has(sel.id) && inside(sel)) return sel;
     for (let i = scene.layersAsc.length - 1; i >= 0; i--) {
@@ -219,6 +299,15 @@ export class CanvasView {
     }
     return null;
   }
+
+  /** Cursor for whatever is under the pointer in idle mode. */
+  #cursorFor(scene, p) {
+    const h = this.#hitHandle(scene, p);
+    if (h) return h.kind === 'rotate' ? 'grab' : CORNER_CURSORS[h.corner];
+    return this.#hitLayer(scene, p) ? 'move' : '';
+  }
+
+  // ---------- Pointer handling ----------
 
   #down(e) {
     // Touch in normal mode is left to the browser so phones can scroll (view only).
@@ -230,6 +319,11 @@ export class CanvasView {
     const pan = () => ({ kind: 'pan', cx: e.clientX, cy: e.clientY, sl: this.frame.scrollLeft, st: this.frame.scrollTop });
 
     if (e.button === 1) { this.drag = pan(); e.preventDefault(); return; }  // middle button always pans
+    if (this.mode === 'reserve-poly') {
+      // A click places a point; a drag pans instead (decided as the pointer moves).
+      this.drag = { ...pan(), kind: 'poly' };
+      return;
+    }
     if (this.mode === 'reserve') {
       this.draft = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
       this.drag = { kind: 'reserve' };
@@ -238,7 +332,7 @@ export class CanvasView {
 
     if (scene.showGuides) {
       const h = this.#hitHandle(scene, p);
-      if (h) { this.drag = { kind: 'scale', layer: h, start: p, b0: layerBounds(h, scene.images.get(h.image_path)) }; return; }
+      if (h) { this.drag = { ...h, start: p }; return; }
       const hit = this.#hitLayer(scene, p);
       if (hit) {
         if (hit.id !== scene.selectedId) this.hooks.onSelect(hit.id);
@@ -255,33 +349,50 @@ export class CanvasView {
     const scene = this.hooks.getScene();
     const p = this.toCanvas(e);
     const d = this.drag;
+    if (this.poly) {
+      this.poly.hover = p;
+      this.canvas.style.cursor = this.#nearStart(p) ? (canClose(this.poly.points) ? 'pointer' : 'not-allowed') : 'crosshair';
+      this.redraw();
+    }
     if (!d) {
-      if (this.mode === 'idle' && scene.showGuides) {
-        this.canvas.style.cursor = this.#hitHandle(scene, p) ? 'nwse-resize' : this.#hitLayer(scene, p) ? 'move' : '';
-      }
+      if (this.mode === 'idle' && scene.showGuides) this.canvas.style.cursor = this.#cursorFor(scene, p);
       return;
     }
     if (d.kind === 'reserve') { this.draft.x1 = p.x; this.draft.y1 = p.y; this.redraw(); return; }
-    if (d.kind === 'pan') {
+    if (d.kind === 'poly' && !d.panning && Math.hypot(e.clientX - d.cx, e.clientY - d.cy) > 5) d.panning = true;
+    if (d.kind === 'pan' || d.panning) {
       this.frame.scrollLeft = d.sl - (e.clientX - d.cx);
       this.frame.scrollTop = d.st - (e.clientY - d.cy);
       return;
     }
+    if (d.kind === 'poly') return;
+
     const l = d.layer, dx = p.x - d.start.x, dy = p.y - d.start.y;
     if (Math.abs(dx) + Math.abs(dy) > 0) d.moved = true;
+    const art = !!(l.image_path && l.transform);
     let patched;
     if (d.kind === 'move') {
-      patched = l.image_path && l.transform
+      patched = art
         ? { ...l, transform: { ...l.transform, x: l.transform.x + dx, y: l.transform.y + dy } }
         : { ...l, shape: moveShape(l.shape, dx, dy) };
-    } else { // scale from the top-left corner
-      const b0 = d.b0;
-      if (l.image_path && l.transform) {
-        const k = Math.max(0.02, Math.max((b0.w + dx) / b0.w, (b0.h + dy) / b0.h)); // keep aspect ratio
-        patched = { ...l, transform: { ...l.transform, scale: l.transform.scale * k } };
-      } else {
-        patched = { ...l, shape: resizeShape(l.shape, { x: b0.x, y: b0.y, w: Math.max(MIN_SIZE, b0.w + dx), h: Math.max(MIN_SIZE, b0.h + dy) }) };
-      }
+    } else if (d.kind === 'scale') {
+      // Scale about the opposite corner with proportions locked: project the pointer onto the diagonal.
+      const f = d.f, corners = frameCorners(f), A = corners[(d.corner + 2) % 4], P0 = corners[d.corner];
+      const vx = P0.x - A.x, vy = P0.y - A.y;
+      const kMin = Math.min(1, (art ? MIN_ART : MIN_SIZE) / Math.max(1e-6, Math.min(f.w, f.h)));
+      const k = Math.max(kMin, ((p.x - A.x) * vx + (p.y - A.y) * vy) / (vx * vx + vy * vy));
+      const cx = A.x + (f.cx - A.x) * k, cy = A.y + (f.cy - A.y) * k, w = f.w * k, h = f.h * k;
+      patched = art
+        ? { ...l, transform: { ...l.transform, x: cx - w / 2, y: cy - h / 2, scale: l.transform.scale * k } }
+        : { ...l, shape: resizeShape(l.shape, { x: cx - w / 2, y: cy - h / 2, w, h }) };
+    } else { // rotate about the centre
+      const f = d.f;
+      const a0 = Math.atan2(d.start.y - f.cy, d.start.x - f.cx), a1 = Math.atan2(p.y - f.cy, p.x - f.cx);
+      let deg = (l.transform.rotation || 0) + (a1 - a0) * 180 / Math.PI;
+      if (e.shiftKey) deg = Math.round(deg / 15) * 15;
+      deg = ((deg % 360) + 540) % 360 - 180;  // keep within -180..180
+      patched = { ...l, transform: { ...l.transform, rotation: Math.round(deg * 10) / 10 } };
+      this.canvas.style.cursor = 'grabbing';
     }
     this.override = { id: l.id, layer: patched };
     this.redraw();
@@ -292,6 +403,10 @@ export class CanvasView {
     this.drag = null;
     if (!d) return;
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
+    if (d.kind === 'poly') {
+      if (!d.panning) this.#addPoint(this.toCanvas(e));
+      return;
+    }
     if (d.kind === 'reserve') {
       const r = normRect(this.draft);
       this.draft = null;
@@ -299,7 +414,8 @@ export class CanvasView {
       if (r.w >= MIN_SIZE && r.h >= MIN_SIZE) this.hooks.onReserve({ type: 'rect', ...roundRect(r) });
       return;
     }
-    if ((d.kind === 'move' || d.kind === 'scale') && this.override && d.moved) {
+    if (d.kind === 'rotate') this.canvas.style.cursor = 'grab';
+    if (['move', 'scale', 'rotate'].includes(d.kind) && this.override && d.moved) {
       const l = this.override.layer;
       const patch = l.image_path && l.transform ? { transform: l.transform } : { shape: l.shape };
       // Keep showing the preview until the scene catches up with the saved values.
@@ -313,12 +429,63 @@ export class CanvasView {
     this.redraw();
   }
 
+  /** Place a polygon point, or close the shape when the first point is clicked. */
+  #addPoint(p) {
+    const pts = this.poly.points, s = this.scale;
+    if (this.#nearStart(p, s)) {
+      if (!canClose(pts)) return;
+      const shape = { type: 'path', points: pts.map(([x, y]) => [Math.round(x), Math.round(y)]) };
+      this.setMode('idle');
+      this.hooks.onReserve(shape);
+      return;
+    }
+    const last = pts[pts.length - 1];
+    if (last && Math.hypot(p.x - last[0], p.y - last[1]) * s < 3) return;  // double click
+    if (!canAdd(pts, [p.x, p.y])) return;
+    pts.push([p.x, p.y]);
+    this.redraw();
+  }
+
   #wheel(e) {
     if (!e.ctrlKey && !e.metaKey) return;  // plain wheel scrolls (pans) as normal
     e.preventDefault();
     const z = Math.min(10, Math.max(1, this.zoom * Math.exp(-e.deltaY * 0.0015)));
     this.hooks.onZoom(z, { x: e.clientX, y: e.clientY });
   }
+}
+
+/** May the line from the last point to q join the shape without crossing it? */
+export function canAdd(pts, q) {
+  const n = pts.length;
+  if (n < 2) return true;
+  const last = pts[n - 1], prev = pts[n - 2];
+  // Doubling back along the previous line would overlap it.
+  const cross = (prev[0] - last[0]) * (q[1] - last[1]) - (prev[1] - last[1]) * (q[0] - last[0]);
+  const dot = (prev[0] - last[0]) * (q[0] - last[0]) + (prev[1] - last[1]) * (q[1] - last[1]);
+  if (Math.abs(cross) < 1e-9 && dot > 0) return false;
+  for (let i = 0; i < n - 2; i++) if (segmentsTouch(pts[i], pts[i + 1], last, q)) return false;
+  return true;
+}
+
+/** May the shape be closed (last point back to the first) without crossing itself? */
+export function canClose(pts) {
+  const n = pts.length;
+  if (n < 3) return false;
+  let area = 0;
+  for (let i = 0, j = n - 1; i < n; j = i++) area += (pts[j][0] - pts[i][0]) * (pts[j][1] + pts[i][1]);
+  if (Math.abs(area) / 2 < 1) return false;           // all points in a line
+  // The closing line must not cross any line except its two neighbours (which share its ends).
+  const last = pts[n - 1], first = pts[0];
+  for (let i = 1; i < n - 2; i++) if (segmentsTouch(pts[i], pts[i + 1], last, first)) return false;
+  // Nor double back along either neighbour.
+  const back = (a, b, c) => {  // does going a -> b -> c reverse direction along a line?
+    const cr = (a[0] - b[0]) * (c[1] - b[1]) - (a[1] - b[1]) * (c[0] - b[0]);
+    const dt = (a[0] - b[0]) * (c[0] - b[0]) + (a[1] - b[1]) * (c[1] - b[1]);
+    return Math.abs(cr) < 1e-9 && dt > 0;
+  };
+  if (back(pts[n - 2], last, first) || back(last, first, pts[1])) return false;
+  const b = shapeBounds({ type: 'path', points: pts });
+  return b.w >= 1 && b.h >= 1;
 }
 
 const normRect = d => ({ x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) });

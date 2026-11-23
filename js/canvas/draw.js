@@ -25,13 +25,76 @@ export function shapeBounds(shape) {
   return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
 }
 
-/** Bounds of a layer: its art if uploaded (img given), else its claimed shape. Rotation is ignored. */
-export function layerBounds(layer, img) {
+/**
+ * A layer's box as centre, size and rotation (radians): its art if uploaded (img given),
+ * else its claimed shape's bounds (never rotated).
+ */
+export function layerFrame(layer, img) {
   if (layer.image_path && img && layer.transform) {
-    const t = layer.transform;
-    return { x: t.x, y: t.y, w: img.width * t.scale, h: img.height * t.scale };
+    const t = layer.transform, w = img.width * t.scale, h = img.height * t.scale;
+    return { cx: t.x + w / 2, cy: t.y + h / 2, w, h, angle: (t.rotation || 0) * Math.PI / 180 };
   }
-  return shapeBounds(layer.shape);
+  const b = shapeBounds(layer.shape);
+  return b && { cx: b.x + b.w / 2, cy: b.y + b.h / 2, w: b.w, h: b.h, angle: 0 };
+}
+
+/** Frame corners in canvas px, clockwise from top-left: [tl, tr, br, bl]. */
+export function frameCorners(f) {
+  const c = Math.cos(f.angle), s = Math.sin(f.angle);
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => {
+    const x = sx * f.w / 2, y = sy * f.h / 2;
+    return { x: f.cx + x * c - y * s, y: f.cy + x * s + y * c };
+  });
+}
+
+/** A canvas point in the frame's own unrotated coordinates, relative to its centre. */
+export function toFrame(f, p) {
+  const c = Math.cos(f.angle), s = Math.sin(f.angle), dx = p.x - f.cx, dy = p.y - f.cy;
+  return { x: dx * c + dy * s, y: -dx * s + dy * c };
+}
+
+/** Axis-aligned bounds of a layer, including any rotation of its art. */
+export function layerBounds(layer, img) {
+  const f = layerFrame(layer, img);
+  if (!f) return null;
+  if (!f.angle) return { x: f.cx - f.w / 2, y: f.cy - f.h / 2, w: f.w, h: f.h };
+  const pts = frameCorners(f), xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const x = Math.min(...xs), y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/** Is the point inside the layer (its rotated art box, or its claimed shape)? */
+export function layerContains(layer, img, p) {
+  const f = layerFrame(layer, img);
+  if (!f) return false;
+  if (layer.image_path && img && layer.transform) {
+    const q = toFrame(f, p);
+    return Math.abs(q.x) <= f.w / 2 && Math.abs(q.y) <= f.h / 2;
+  }
+  return layer.shape.type === 'path' ? pointInPolygon(layer.shape.points, p)
+    : Math.abs(p.x - f.cx) <= f.w / 2 && Math.abs(p.y - f.cy) <= f.h / 2;
+}
+
+/** Even-odd test for a point in a polygon given as [[x, y], ...]. */
+export function pointInPolygon(pts, p) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > p.y) !== (yj > p.y) && p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Do segments ab and cd touch? Shared endpoints count as touching, so callers skip the
+ * neighbouring segment. Collinear overlaps count too.
+ */
+export function segmentsTouch(a, b, c, d) {
+  const cross = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+  const onSeg = (o, p, q) => Math.min(o[0], p[0]) <= q[0] && q[0] <= Math.max(o[0], p[0]) && Math.min(o[1], p[1]) <= q[1] && q[1] <= Math.max(o[1], p[1]);
+  const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  return (d1 === 0 && onSeg(c, d, a)) || (d2 === 0 && onSeg(c, d, b)) || (d3 === 0 && onSeg(a, b, c)) || (d4 === 0 && onSeg(a, b, d));
 }
 
 /** Trace a shape as the current path. */
@@ -50,7 +113,7 @@ export function moveShape(shape, dx, dy) {
   return { ...shape, points: shape.points.map(([x, y]) => [x + dx, y + dy]) };
 }
 
-/** Fit a shape into new bounds (used when resizing with the corner handle). */
+/** Fit a shape into new bounds (the corner handles keep its proportions, so sx = sy). */
 export function resizeShape(shape, b) {
   if (shape.type === 'rect') return { type: 'rect', ...b };
   const o = shapeBounds(shape);
