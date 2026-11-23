@@ -2,10 +2,10 @@
 
 Caleb answered the overnight questions on 23 Nov 2026. This file records what was decided and what changed. Only the items under "Still open" need anything more.
 
-## Still open (sorted out during setup)
+## Settled during setup
 
-- **23. Placeholder emails.** Accounts sign in with `name@example.com`, which nobody ever sees. We'll check during setup that Supabase accepts `example.com`. If it doesn't, SETUP.md step 3 switches the domain with one setting.
-- **25. Git and GitHub.** GitHub Pages hosts from a GitHub repository, so the local repo gets pushed there during setup (SETUP.md step 5). The repo can be public: it contains no passwords or secrets.
+- **23. Placeholder emails.** Supabase accepted `name@example.com`, so nothing changed.
+- **25. Git and GitHub.** The code is in a public GitHub repository, `Caleb-Agnes/Card-Collaboration`, and the site runs on GitHub Pages at https://caleb-agnes.github.io/Card-Collaboration/. Pushing to `main` updates the site.
 
 ## Decided
 
