@@ -41,6 +41,7 @@
       <button class="btn" id="btn-upload">Upload image</button>
       <button class="btn" id="btn-rename">Edit layer name</button>
       <button class="btn" id="btn-flip">Flip horizontally</button>
+      <button class="btn" id="btn-owner" hidden>Change owner</button>
       <button class="btn" id="btn-delete">Delete layer</button>
     </div>
     <!-- Host-only box -->
@@ -93,7 +94,8 @@
   <div class="modal-head"><span class="modal-title">Name your space</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
   <div class="modal-body">
     <label>What will you draw here?<input class="input" id="reserve-label" type="text" maxlength="80" placeholder="Nami - League of Legends"></label>
-    <p class="modal-note">Everyone will see this label and your name on the space.</p>
+    <div class="field" id="reserve-owner-field" hidden><span>Whose space is it? (host only)</span><div class="dd" id="reserve-owner"></div></div>
+    <p class="modal-note">Everyone will see this label and the owner’s name on the space.</p>
     <p class="modal-error" id="reserve-error" role="alert"></p>
   </div>
   <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="reserve-save">Save</button></div>
@@ -134,6 +136,16 @@
     <label>Layer name<input class="input" id="rename-input" type="text" maxlength="80"></label>
   </div>
   <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="rename-save">Save</button></div>
+</dialog>
+
+<dialog class="modal" id="modal-owner" aria-label="Change owner">
+  <div class="modal-head"><span class="modal-title">Change owner</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <div class="modal-body">
+    <div class="field"><span>Who does this layer belong to?</span><div class="dd" id="owner-name"></div></div>
+    <p class="modal-note">The new owner can then move it, upload new versions and delete it. You can still change it too.</p>
+    <p class="modal-error" id="owner-error" role="alert"></p>
+  </div>
+  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="owner-save">Save</button></div>
 </dialog>
 
 <dialog class="modal" id="modal-setup" aria-label="Canvas setup">

@@ -108,7 +108,8 @@ function render() {
 
   const sel = selectedLayer();
   const editable = sel && canEdit(sel);
-  for (const id of ['btn-download', 'btn-upload', 'btn-rename', 'btn-delete']) $(id).disabled = !editable;
+  for (const id of ['btn-download', 'btn-upload', 'btn-rename', 'btn-delete', 'btn-owner']) $(id).disabled = !editable;
+  $('btn-owner').hidden = !isHost();
   $('btn-flip').disabled = !(editable && sel.image_path);
   const cantReserve = !state.me || (state.project.locked && !isHost());
   $('btn-reserve').disabled = cantReserve && !reserving;  // you can always exit
@@ -251,7 +252,15 @@ function startReserve(shape) {
   render();  // reserve mode has ended: hide the how-to animation
   openModal('modal-reserve');
 }
-onModalOpen('modal-reserve', () => { $('reserve-label').value = ''; $('reserve-error').textContent = ''; });
+// The host can create a space on someone else's behalf (e.g. for art sent to them directly).
+const reserveOwner = createDropdown($('reserve-owner'), { profiles: true });
+const profileIdByName = name => state.profiles.find(p => p.name === name)?.id;
+onModalOpen('modal-reserve', () => {
+  $('reserve-label').value = '';
+  $('reserve-error').textContent = '';
+  $('reserve-owner-field').hidden = !isHost();
+  reserveOwner.setValue(state.me?.name ?? null);
+});
 $('modal-reserve').addEventListener('close', () => { pendingShape = null; render(); });
 $('reserve-save').addEventListener('click', async () => {
   const label = $('reserve-label').value.trim();
@@ -259,7 +268,8 @@ $('reserve-save').addEventListener('click', async () => {
   const shape = pendingShape;
   const top = state.layers.reduce((m, l) => Math.max(m, l.stack_order), 0);
   try {
-    const layer = await store.createLayer({ owner_id: state.me.id, label, shape, stack_order: top + 1 });
+    const owner_id = (isHost() && profileIdByName(reserveOwner.value)) || state.me.id;
+    const layer = await store.createLayer({ owner_id, label, shape, stack_order: top + 1 });
     closeModal('modal-reserve');
     state.selectedId = layer.id;
     await reload();
@@ -447,6 +457,21 @@ $('rename-save').addEventListener('click', async () => {
   if (label && l && label !== l.label) await saveLayer(l.id, { label });
 });
 $('rename-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('rename-save').click(); });
+
+// Change owner (host only)
+const ownerName = createDropdown($('owner-name'), { profiles: true });
+onModalOpen('modal-owner', () => {
+  ownerName.setValue(profileById(selectedLayer()?.owner_id)?.name ?? null);
+  $('owner-error').textContent = '';
+});
+$('owner-save').addEventListener('click', async () => {
+  const l = selectedLayer(), id = profileIdByName(ownerName.value);
+  if (!l) return;
+  if (!id) { $('owner-error').textContent = 'Pick a person.'; return; }
+  closeModal('modal-owner');
+  if (id !== l.owner_id) await saveLayer(l.id, { owner_id: id });
+});
+$('btn-owner').addEventListener('click', () => { if (selectedLayer() && isHost()) openModal('modal-owner'); });
 
 // Delete
 $('btn-delete').addEventListener('click', async () => {
