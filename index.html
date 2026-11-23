@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collab Card Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <h1 class="page-title" id="project-title">Happy Birthday Card!!</h1>
+  <div class="acct-box" id="acct-box" aria-label="Signed in as" hidden></div>
+</header>
+
+<div class="main-grid">
+  <div class="tools">
+    <div class="panel">
+      <div class="panel-head">Tools</div>
+      <button class="btn" id="btn-reserve">Reserve an area</button>
+      <button class="btn" id="btn-preview">Preview final image</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head">Layer Options</div>
+      <button class="btn" id="btn-download">Download template</button>
+      <button class="btn" id="btn-upload">Upload image</button>
+      <button class="btn" id="btn-rename">Edit layer name</button>
+      <button class="btn" id="btn-delete">Delete layer</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="canvas-frame"><div class="canvas" id="canvas"></div></div>
+    <div class="panel zoom-panel">
+      <div class="zoom">
+        <span>&times;1</span>
+        <input class="slider" id="zoom" type="range" min="1" max="10" step="0.1" value="1" aria-label="Zoom">
+        <span>&times;10</span>
+        <span class="zoom-divider" aria-hidden="true"></span>
+        <span class="num-wrap"><span class="num-x" aria-hidden="true">&times;</span><input class="num" id="zoom-num" type="number" min="1" max="10" step="0.1" value="1.0" aria-label="Zoom value"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="layers">
+    <div class="panel-head">Layers</div>
+    <!-- Rows rendered by js/ui/layers-panel.js. Top of list = top of stack (to confirm, open question 7). -->
+  </div>
+</div>
+
+<!-- ---------- Modals (native <dialog>, opened as overlays by js/ui/modals.js) ---------- -->
+
+<dialog class="modal" id="modal-signin" aria-label="Sign in">
+  <div class="modal-head"><span class="modal-title">Sign in</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <div class="modal-body">
+    <div class="field"><span>Who are you?</span><div class="dd" id="signin-name"></div></div>
+    <label>Password<input class="input" id="signin-password" type="password" autocomplete="current-password"></label>
+    <p class="modal-note">Caleb will give you your password.</p>
+    <p class="modal-error" id="signin-error" role="alert"></p>
+  </div>
+  <div class="modal-actions"><button class="btn" id="signin-continue">Continue</button></div>
+</dialog>
+
+<dialog class="modal" id="modal-download" aria-label="Download template">
+  <div class="modal-head"><span class="modal-title">Download template</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <div class="modal-body">
+    <div class="field"><span>Which app are you drawing in?</span><div class="dd" id="download-app"></div></div>
+    <p class="modal-note">The template is a snapshot of the canvas right now. Download again later to see newer art.</p>
+  </div>
+  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="download-go">Download</button></div>
+</dialog>
+
+<dialog class="modal" id="modal-upload" aria-label="Upload image">
+  <div class="modal-head"><span class="modal-title">Upload image</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <div class="modal-body">
+    <div class="dropzone">Drop your file here<br><input type="file" id="upload-file" accept=".psd,.ora,.png,.jpg"></div>
+    <p class="modal-note">Your layered template file or a PNG. Uploading again replaces your art; the old version is kept.</p>
+  </div>
+  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="upload-go">Upload</button></div>
+</dialog>
+
+<dialog class="modal" id="modal-rename" aria-label="Edit layer name">
+  <div class="modal-head"><span class="modal-title">Edit layer name</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <div class="modal-body">
+    <label>Layer name<input class="input" id="rename-input" type="text"></label>
+  </div>
+  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="rename-save">Save</button></div>
+</dialog>
+
+<!-- Not in the design reference: built from the same modal parts, no new styles. -->
+<dialog class="modal" id="modal-delete" aria-label="Delete layer">
+  <div class="modal-head"><span class="modal-title">Delete layer</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <div class="modal-body">
+    <p style="margin:0">Delete &ldquo;<span id="delete-name"></span>&rdquo;?</p>
+    <p class="modal-note">This removes the layer and its space for everyone.</p>
+  </div>
+  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="delete-go">Delete</button></div>
+</dialog>
+
+</body>
+</html>

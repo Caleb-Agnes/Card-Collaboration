@@ -1,0 +1,132 @@
+/*
+  Collab Card Builder styles.
+  Sections down to "Custom dropdown" are copied as-is from design-reference.html (signed off).
+  Anything added for the app lives under "App additions" at the bottom.
+*/
+
+/* ---------- Tokens ---------- */
+:root{
+  color-scheme:light;
+  --cherry:#F7B2B7;   /* default button */
+  --teal:#067BC2;     /* slider knob */
+  --sky:#84BCDA;      /* layer rows, Cancel buttons, slider track */
+  --amber:#F8D945;    /* selected layer, modal close button */
+  --page:#FEF3F4;     /* page background (Cherry Blossom 15% on white) */
+  --line:#000;        /* all borders */
+  --divider:rgba(0,0,0,.15); /* faint lines under headings */
+  --hover-grey:#ededed;      /* dropdown option hover (non-profile lists) */
+  --side:240px;       /* width of both side columns */
+  /* Profile colours (badge background; badge text is black except Anna = white) */
+  --p-caleb:#F7B2B7; --p-sander:#F4845F; --p-nam:#A3D65C; --p-maks:#2E9E6B;
+  --p-anna:#067BC2;  --p-adam:#8E7CE6;   --p-josh:#D77FD1;
+}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;padding:16px;background:var(--page);color:#000;font-family:Lexend,sans-serif;overflow-x:clip}
+button,input,select,textarea{font-family:inherit}
+
+/* ---------- Heading bar ---------- */
+.topbar{position:relative;margin:-16px -16px 24px;padding:14px 16px;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.page-title{margin:0;text-align:center;font-weight:500}
+.acct-box{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);padding:6px 10px;font-size:14px}
+.sw{flex:none;display:inline-block;width:14px;height:14px;border-radius:4px}
+
+/* ---------- Layout ---------- */
+.main-grid{display:grid;grid-template-columns:var(--side) auto var(--side);gap:24px;justify-content:center;align-items:start}
+.tools{display:flex;flex-direction:column;gap:16px}
+@media(max-width:900px){
+  .main-grid{grid-template-columns:minmax(0,1fr);justify-items:center}
+  .tools{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+}
+@media(max-width:600px){.acct-box{position:static;transform:none;width:max-content;margin:10px auto 0}}
+
+/* ---------- Buttons ---------- */
+.btn{border:none;border-radius:0;padding:11px 16px;background-color:var(--cherry);color:#000;cursor:pointer;transition:transform .12s,filter .12s}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:scale(.95)}
+.btn.teal{background-color:var(--teal)}.btn.sky{background-color:var(--sky)}.btn.amber{background-color:var(--amber)}
+
+/* ---------- Panels (Tools, Layer Options, Layers, Zoom) ---------- */
+.panel{display:flex;flex-direction:column;gap:2px;padding:2px;width:var(--side);background:#fff;border:1px solid var(--line);border-radius:12px 12px 0 0}
+.panel-head{margin:-2px -2px 2px;padding:8px 12px;border-bottom:1px solid var(--divider);font-size:14px;font-weight:600}
+/* Tool buttons: compact and centred to tell them apart from layer rows */
+.panel .btn{width:100%;text-align:center;padding:7px 12px;font-size:14px}
+
+/* ---------- Layer rows ---------- */
+.layer{display:flex;align-items:center;gap:8px;width:100%;height:50px;padding:0 6px;text-align:left;background:var(--sky);color:#000;border:none;transition:filter .12s,transform .12s}
+.thumb{flex:none;width:38px;height:38px;background:#fff;border:1px solid var(--line)}
+.layer-text{display:flex;flex-direction:column;line-height:1.2;overflow:hidden}
+.badge{align-self:flex-start;font-size:12px;padding:0 6px;border-radius:999px;background:var(--oc);color:var(--ot)}
+.layer-label{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* States: only editable layers react to hover and click */
+.layer.is-locked{opacity:.55}
+.layer.is-edit{cursor:pointer}
+.layer.is-edit:hover{filter:brightness(1.08)}
+.layer.is-edit:active{transform:scale(.95)}
+.layer.is-selected{background:var(--amber)}
+
+/* ---------- Canvas ---------- */
+.canvas-frame{width:min(420px,86vw);aspect-ratio:1/1.414;overflow:auto;border:1px solid var(--line)}
+.canvas{width:calc(100% * var(--z,1));aspect-ratio:1/1.414;background:#fff}
+
+/* ---------- Zoom box ---------- */
+.zoom-panel{width:auto;margin-top:10px;border-radius:12px}
+.zoom{display:flex;align-items:center;gap:8px;padding:8px 10px;font-size:14px}
+.zoom-divider{flex:none;align-self:stretch;width:1px;margin:-8px 2px;background:var(--divider)}
+.slider{flex:1;-webkit-appearance:none;appearance:none;background:transparent;height:24px;margin:0}
+.slider::-webkit-slider-runnable-track{height:10px;background:var(--sky);border-radius:5px}
+.slider::-moz-range-track{height:10px;background:var(--sky);border-radius:5px}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-6px;background:var(--teal);border:none;border-radius:50%;transition:filter .12s}
+.slider::-moz-range-thumb{width:22px;height:22px;background:var(--teal);border:none;border-radius:50%;transition:filter .12s}
+.slider::-webkit-slider-thumb:hover{filter:brightness(1.08)}
+.slider::-moz-range-thumb:hover{filter:brightness(1.08)}
+/* Editable zoom value: x shown inside the box, hidden while typing */
+.num-wrap{position:relative;flex:none;display:inline-flex}
+.num-x{position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none}
+.num-wrap:focus-within .num-x{display:none}
+.num{width:4.2em;padding:4px 6px;font-size:14px;text-align:right;background:#fff;color:#000;border:1px solid var(--line);border-radius:0;-moz-appearance:textfield;appearance:textfield}
+.num::-webkit-inner-spin-button,.num::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+
+/* ---------- Modals ---------- */
+.modal{width:min(360px,100%);background:#fff;border:1px solid var(--line);border-radius:12px 12px 0 0}
+.modal-head{display:flex;align-items:stretch;justify-content:space-between;min-height:40px;padding:0 0 0 14px;border-bottom:1px solid var(--divider);font-size:16px;font-weight:600}
+.modal-title{align-self:center}
+/* Close: fills the top-right corner, 5px inset, only that corner rounded.
+   Radius: 12px (matches modal) vs 9px still undecided - see HANDOVER.md */
+.btn.modal-close{flex:none;width:30px;margin:5px 5px 5px 0;padding:0;background-color:var(--amber);border-radius:0 12px 0 0;display:grid;place-items:center}
+.modal-close svg{width:14px;height:14px}
+.modal-body{display:flex;flex-direction:column;gap:10px;padding:14px;font-size:14px}
+.modal-body label,.field{display:flex;flex-direction:column;gap:4px}
+.input{width:100%;padding:6px 8px;font-size:14px;background:#fff;color:#000;border:1px solid var(--line);border-radius:0}
+.modal-note{margin:0;font-size:13px;opacity:.7}
+.dropzone{padding:20px 12px;text-align:center;border:1px dashed var(--line)}
+.dropzone input[type=file]{margin-top:10px;font-size:14px}
+input[type=file]::file-selector-button{font:inherit;padding:6px 12px;margin-right:10px;background-color:var(--cherry);color:#000;border:none;border-radius:0;cursor:pointer;transition:transform .12s,filter .12s}
+input[type=file]::file-selector-button:hover{filter:brightness(1.08)}
+input[type=file]:active::file-selector-button{transform:scale(.95)}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 14px 14px}
+
+/* ---------- Custom dropdown (native select lists can't be styled) ---------- */
+.dd{position:relative;width:100%}
+.dd-btn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px;font-size:14px;text-align:left;background:#fff;color:#000;border:1px solid var(--line);border-radius:0;cursor:pointer}
+.dd-btn svg{flex:none;width:12px;height:12px;transition:transform .12s}
+.dd.open .dd-btn svg{transform:rotate(180deg)}
+.dd-val{display:flex;align-items:center;gap:8px}
+.dd-list{position:absolute;left:0;right:0;top:100%;z-index:10;display:none;max-height:220px;overflow:auto;background:#fff;border:1px solid var(--line);border-top:none}
+.dd.open .dd-list{display:block}
+.dd-opt{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;font-size:14px;text-align:left;background:#fff;color:#000;border:none;border-radius:0;cursor:pointer}
+.dd-opt[aria-selected=true]{font-weight:600}
+/* Hover: light grey, or 25% of the profile colour for profile lists (set --hov per option) */
+.dd-opt:hover{background:var(--hov,var(--hover-grey))}
+
+/* ---------- App additions ---------- */
+/* Modals are native <dialog> elements opened with showModal(): the browser handles
+   the overlay, focus trapping and Escape. These rules strip the browser's dialog defaults
+   so the .modal styles above are all that show. */
+dialog.modal{padding:0;margin:auto;max-width:calc(100% - 32px);max-height:none;overflow:visible;color:#000}
+/* PROVISIONAL backdrop: open question 6 in HANDOVER.md, not signed off yet. */
+dialog.modal::backdrop{background:rgba(0,0,0,.35)}
+/* Small error line in modals (e.g. no name picked). Uses existing text colour only. */
+.modal-error{margin:0;font-size:13px;font-weight:500}
+.modal-error:empty{display:none}
+/* Hidden account box while signed out */
+.acct-box[hidden]{display:none}
