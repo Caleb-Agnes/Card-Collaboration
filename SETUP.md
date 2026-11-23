@@ -7,9 +7,11 @@ You can try the whole app before doing any of this: with `js/config.js` left emp
 ## 1. Create the Supabase project
 
 1. Go to [supabase.com](https://supabase.com), sign in and click **New project**. Any name (e.g. `collab-card`), any region near you, and a database password you keep somewhere safe (the app never uses it).
-2. When it has finished creating, open **Project Settings > API** (it may be called **Data API** or **API Keys**) and note:
-   - the **Project URL** (looks like `https://abcd1234.supabase.co`)
-   - the **anon public** key (a long string starting `eyJ...`, or a newer `sb_publishable_...` key; either works)
+2. When it has finished creating, note two values:
+   - the **Project URL**, which looks like `https://abcd1234.supabase.co`. Find it under **Data API > Overview** as the "API URL", and leave off the `/rest/v1/` at the end.
+   - the **publishable** key, which starts `sb_publishable_...`. Find it under **Project Settings > API Keys**. An older `anon` key starting `eyJ...` also works. **Never** use the secret key.
+
+   When creating the project, under **Data access**, tick "Enable Data API" and "Enable RLS on new tables automatically", and leave "Grant API access to new tables automatically" unticked.
 
 The anon key is meant to be public. It ends up in the website, and all the protection comes from the database rules in step 2.
 
