@@ -100,6 +100,12 @@ drop trigger if exists layers_before_update on public.layers;
 create trigger layers_before_update before update on public.layers
   for each row execute function public.layers_before_update();
 
+-- ---------- Table access ----------
+-- Signed-in users reach the tables through the API; RLS below decides which rows.
+-- Signed-out visitors (anon) get nothing.
+grant select, insert, update, delete on public.projects, public.profiles, public.layers to authenticated;
+revoke all on public.projects, public.profiles, public.layers from anon;
+
 -- ---------- Row Level Security ----------
 
 alter table public.projects enable row level security;

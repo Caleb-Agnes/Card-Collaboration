@@ -13,6 +13,7 @@ export async function createSupabaseStore() {
   let projectId = null;
 
   const check = ({ data, error }) => { if (error) throw error; return data; };
+  const one = rows => { if (!rows?.length) throw new Error('Not allowed.'); return rows[0]; };
   const emailFor = name => `${name.toLowerCase()}@${EMAIL_DOMAIN}`;
 
   async function profileForUser(userId) {
@@ -32,7 +33,13 @@ export async function createSupabaseStore() {
     /** P2, P4: the password is checked by Supabase Auth on the server. */
     async signIn(name, password) {
       const { data, error } = await sb.auth.signInWithPassword({ email: emailFor(name), password });
-      if (error) throw new Error(error.status === 400 ? 'Wrong password.' : error.message);
+      if (error) {
+        if (error.status === 400) throw new Error('Wrong password.');
+        if (!error.status || /fetch/i.test(error.message)) {
+          throw new Error('Couldn’t reach the server. If nobody has used the card for a while, ask Caleb to wake it up.');
+        }
+        throw new Error(error.message);
+      }
       const profile = await profileForUser(data.user.id);
       if (!profile) throw new Error('This account has no profile yet. Check seed.sql has been run.');
       return profile;
@@ -64,14 +71,16 @@ export async function createSupabaseStore() {
       return check(await sb.from('layers').insert({ ...fields, project_id: projectId }).select().single());
     },
 
+    // When RLS blocks an update or delete, PostgREST silently matches 0 rows, so treat
+    // "nothing changed" as refused.
     async updateLayer(id, patch) {
-      return check(await sb.from('layers').update(patch).eq('id', id).select().single());
+      return one(check(await sb.from('layers').update(patch).eq('id', id).select()));
     },
 
-    async deleteLayer(id) { check(await sb.from('layers').delete().eq('id', id)); },
+    async deleteLayer(id) { one(check(await sb.from('layers').delete().eq('id', id).select())); },
 
     async updateProject(patch) {
-      return check(await sb.from('projects').update(patch).eq('id', projectId).select().single());
+      return one(check(await sb.from('projects').update(patch).eq('id', projectId).select()));
     },
 
     /** Upload a new file. upsert: false means an existing path is never overwritten (U4). */
