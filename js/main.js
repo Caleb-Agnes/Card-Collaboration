@@ -7,6 +7,7 @@ import { initModals, onModalOpen, openModal, closeModal } from './ui/modals.js';
 import { renderLayers } from './ui/layers-panel.js';
 import { initZoom } from './ui/zoom.js';
 import { notice } from './ui/notice.js';
+import { createReserveDemo } from './ui/reserve-demo.js';
 import { CanvasView } from './canvas/view.js';
 import { layerBounds, overlapFraction, shapeBounds, canvasToBlob, makeCanvas } from './canvas/draw.js';
 import { APPS, buildTemplate, saveBlob } from './templates.js';
@@ -61,6 +62,8 @@ const view = new CanvasView($('canvas-frame'), $('canvas'), {
 });
 
 // ---------- Rendering ----------
+const reserveDemo = createReserveDemo($('reserve-demo'));
+
 function renderAccount() {
   const box = $('acct-box');
   box.hidden = !state.me;
@@ -94,6 +97,7 @@ function render() {
   $('tools-note').textContent = !state.me ? 'Sign in to see the card.'
     : view.mode === 'reserve' ? 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.'
     : state.project.locked ? (isHost() ? 'Editing is locked for everyone else.' : 'The card is locked, so it can’t be changed.') : '';
+  reserveDemo.show(view.mode === 'reserve', state.me ? styleFor(state.me.id).colour : undefined);
   $('host-panel').hidden = !isHost();
   $('btn-lock').textContent = state.project.locked ? 'Unlock editing' : 'Lock editing';
   view.redraw();
@@ -217,6 +221,7 @@ $('signin-form').addEventListener('submit', async e => {
 let pendingShape = null;
 function startReserve(shape) {
   pendingShape = shape;
+  render();  // reserve mode has ended: hide the how-to animation
   openModal('modal-reserve');
 }
 onModalOpen('modal-reserve', () => { $('reserve-label').value = ''; $('reserve-error').textContent = ''; });

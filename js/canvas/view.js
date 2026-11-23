@@ -208,28 +208,13 @@ export class CanvasView {
   #renderPoly(ctx, me, s, sx, sy) {
     const { points, hover } = this.poly;
     const sc = ([x, y]) => [x * s - sx, y * s - sy];
-    const pts = points.map(sc);
-    const closing = hover && this.#nearStart(hover, s);
-    ctx.save();
-    ctx.lineWidth = 2; ctx.strokeStyle = me.colour; ctx.fillStyle = me.colour;
-    ctx.beginPath();
-    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    if (pts.length >= 3) { ctx.globalAlpha = .25; ctx.fill(); ctx.globalAlpha = 1; }
-    ctx.stroke();
-    if (hover) {
-      const ok = closing ? canClose(points) : canAdd(points, [hover.x, hover.y]);
-      const [lx, ly] = pts[pts.length - 1], [hx, hy] = closing ? pts[0] : sc([hover.x, hover.y]);
-      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(hx, hy);
-      if (!ok) { ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); }
-      ctx.stroke();
-      ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = me.colour;
-    }
-    for (const [x, y] of pts.slice(1)) ctx.fillRect(x - 3, y - 3, 6, 6);
-    const [fx, fy] = pts[0];
-    ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI * 2);
-    ctx.fillStyle = closing && canClose(points) ? me.colour : '#fff';
-    ctx.fill(); ctx.stroke();
-    ctx.restore();
+    const closing = !!hover && this.#nearStart(hover, s);
+    drawPolyDraft(ctx, points.map(sc), hover && sc([hover.x, hover.y]), {
+      colour: me.colour,
+      closing,
+      ok: !!hover && (closing ? canClose(points) : canAdd(points, [hover.x, hover.y])),
+      closable: canClose(points),
+    });
   }
 
   /** Owner-coloured pill with "Name · Label", matching the layer-row badge. */
@@ -420,6 +405,37 @@ export class CanvasView {
     const z = Math.min(10, Math.max(1, this.zoom * Math.exp(-e.deltaY * 0.0015)));
     this.hooks.onZoom(z, { x: e.clientX, y: e.clientY });
   }
+}
+
+/**
+ * Draw a shape in progress, in screen px. Shared with the how-to animation (js/ui/reserve-demo.js)
+ * so both look identical.
+ * @param {number[][]} pts   placed points
+ * @param {number[]|null} hover  pointer position, or null
+ * @param {{colour, closing, ok, closable}} o  closing: pointer is on the first point;
+ *   ok: the line to the pointer is allowed; closable: the shape could be closed now
+ */
+export function drawPolyDraft(ctx, pts, hover, { colour, closing, ok, closable }) {
+  if (!pts.length) return;
+  ctx.save();
+  ctx.lineWidth = 2; ctx.strokeStyle = colour; ctx.fillStyle = colour;
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  if (pts.length >= 3) { ctx.globalAlpha = .25; ctx.fill(); ctx.globalAlpha = 1; }
+  ctx.stroke();
+  if (hover) {
+    const [lx, ly] = pts[pts.length - 1], [hx, hy] = closing ? pts[0] : hover;
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(hx, hy);
+    if (!ok) { ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); }
+    ctx.stroke();
+    ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = colour;
+  }
+  for (const [x, y] of pts.slice(1)) ctx.fillRect(x - 3, y - 3, 6, 6);
+  const [fx, fy] = pts[0];
+  ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+  ctx.fillStyle = closing && closable ? colour : '#fff';
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
 }
 
 /** May the line from the last point to q join the shape without crossing it? */
