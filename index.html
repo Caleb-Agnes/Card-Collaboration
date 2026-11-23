@@ -13,8 +13,12 @@
 <body>
 
 <header class="topbar">
-  <h1 class="page-title" id="project-title">Happy Birthday Card!!</h1>
-  <div class="acct-box" id="acct-box" aria-label="Signed in as" hidden></div>
+  <h1 class="page-title" id="project-title">Collab Card</h1>
+  <!-- PROVISIONAL "Switch" button: open question 1 in QUESTIONS.md -->
+  <div class="acct-wrap">
+    <div class="acct-box" id="acct-box" aria-label="Signed in as" hidden></div>
+    <button class="btn" id="btn-switch">Sign in</button>
+  </div>
 </header>
 
 <div class="main-grid">
@@ -23,18 +27,32 @@
       <div class="panel-head">Tools</div>
       <button class="btn" id="btn-reserve">Reserve an area</button>
       <button class="btn" id="btn-preview">Preview final image</button>
+      <p class="panel-note" id="tools-note"></p>
     </div>
     <div class="panel">
       <div class="panel-head">Layer Options</div>
       <button class="btn" id="btn-download">Download template</button>
       <button class="btn" id="btn-upload">Upload image</button>
       <button class="btn" id="btn-rename">Edit layer name</button>
+      <!-- PROVISIONAL: U3 / L3 controls, open question 4 -->
+      <button class="btn" id="btn-flip">Flip horizontally</button>
+      <button class="btn" id="btn-up">Move up</button>
+      <button class="btn" id="btn-down">Move down</button>
       <button class="btn" id="btn-delete">Delete layer</button>
+    </div>
+    <!-- PROVISIONAL host-only box: open question 5 -->
+    <div class="panel" id="host-panel" hidden>
+      <div class="panel-head">Host</div>
+      <button class="btn" id="btn-setup">Canvas setup</button>
+      <button class="btn" id="btn-lock">Lock editing</button>
+      <button class="btn" id="btn-export-png">Export PNG</button>
+      <button class="btn" id="btn-export-pdf">Export A5 PDF</button>
+      <button class="btn" id="btn-backup">Download backup</button>
     </div>
   </div>
 
   <div>
-    <div class="canvas-frame"><div class="canvas" id="canvas"></div></div>
+    <div class="canvas-frame" id="canvas-frame"><div class="canvas" id="canvas"></div></div>
     <div class="panel zoom-panel">
       <div class="zoom">
         <span>&times;1</span>
@@ -48,7 +66,7 @@
 
   <div class="panel" id="layers">
     <div class="panel-head">Layers</div>
-    <!-- Rows rendered by js/ui/layers-panel.js. Top of list = top of stack (to confirm, open question 7). -->
+    <!-- Rows rendered by js/ui/layers-panel.js. Top of list = front of the stack (open question 7). -->
   </div>
 </div>
 
@@ -56,20 +74,35 @@
 
 <dialog class="modal" id="modal-signin" aria-label="Sign in">
   <div class="modal-head"><span class="modal-title">Sign in</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <form class="modal-form" id="signin-form">
+    <div class="modal-body">
+      <div class="field"><span>Who are you?</span><div class="dd" id="signin-name"></div></div>
+      <label>Password<input class="input" id="signin-password" type="password" autocomplete="current-password"></label>
+      <p class="modal-note">Caleb will give you your password.</p>
+      <p class="modal-note" id="signin-demo" hidden>Demo mode: no server is connected, so any password works and nothing is saved.</p>
+      <p class="modal-error" id="signin-error" role="alert"></p>
+    </div>
+    <div class="modal-actions"><button class="btn" id="signin-continue" type="submit">Continue</button></div>
+  </form>
+</dialog>
+
+<dialog class="modal" id="modal-reserve" aria-label="Name your space">
+  <div class="modal-head"><span class="modal-title">Name your space</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
   <div class="modal-body">
-    <div class="field"><span>Who are you?</span><div class="dd" id="signin-name"></div></div>
-    <label>Password<input class="input" id="signin-password" type="password" autocomplete="current-password"></label>
-    <p class="modal-note">Caleb will give you your password.</p>
-    <p class="modal-error" id="signin-error" role="alert"></p>
+    <label>What will you draw here?<input class="input" id="reserve-label" type="text" maxlength="80" placeholder="Nami - League of Legends"></label>
+    <p class="modal-note">Everyone will see this label and your name on the space.</p>
+    <p class="modal-error" id="reserve-error" role="alert"></p>
   </div>
-  <div class="modal-actions"><button class="btn" id="signin-continue">Continue</button></div>
+  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="reserve-save">Save</button></div>
 </dialog>
 
 <dialog class="modal" id="modal-download" aria-label="Download template">
   <div class="modal-head"><span class="modal-title">Download template</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
   <div class="modal-body">
     <div class="field"><span>Which app are you drawing in?</span><div class="dd" id="download-app"></div></div>
+    <p class="modal-note" id="download-format"></p>
     <p class="modal-note">The template is a snapshot of the canvas right now. Download again later to see newer art.</p>
+    <p class="modal-error" id="download-error" role="alert"></p>
   </div>
   <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="download-go">Download</button></div>
 </dialog>
@@ -77,8 +110,11 @@
 <dialog class="modal" id="modal-upload" aria-label="Upload image">
   <div class="modal-head"><span class="modal-title">Upload image</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
   <div class="modal-body">
-    <div class="dropzone">Drop your file here<br><input type="file" id="upload-file" accept=".psd,.ora,.png,.jpg"></div>
+    <div class="dropzone" id="upload-drop">Drop your file here<br><input type="file" id="upload-file" accept=".psd,.ora,.png,.jpg,.jpeg"></div>
     <p class="modal-note">Your layered template file or a PNG. Uploading again replaces your art; the old version is kept.</p>
+    <p class="modal-note" id="upload-versions"></p>
+    <div class="modal-warnings" id="upload-warnings" role="alert"></div>
+    <p class="modal-error" id="upload-error" role="alert"></p>
   </div>
   <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="upload-go">Upload</button></div>
 </dialog>
@@ -86,19 +122,34 @@
 <dialog class="modal" id="modal-rename" aria-label="Edit layer name">
   <div class="modal-head"><span class="modal-title">Edit layer name</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
   <div class="modal-body">
-    <label>Layer name<input class="input" id="rename-input" type="text"></label>
+    <label>Layer name<input class="input" id="rename-input" type="text" maxlength="80"></label>
   </div>
   <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="rename-save">Save</button></div>
 </dialog>
 
-<!-- Not in the design reference: built from the same modal parts, no new styles. -->
-<dialog class="modal" id="modal-delete" aria-label="Delete layer">
-  <div class="modal-head"><span class="modal-title">Delete layer</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+<dialog class="modal" id="modal-setup" aria-label="Canvas setup">
+  <div class="modal-head"><span class="modal-title">Canvas setup</span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
   <div class="modal-body">
-    <p style="margin:0">Delete &ldquo;<span id="delete-name"></span>&rdquo;?</p>
-    <p class="modal-note">This removes the layer and its space for everyone.</p>
+    <label>Title<input class="input" id="setup-title" type="text" maxlength="80"></label>
+    <div class="field-row">
+      <label>Width (px)<input class="input" id="setup-width" type="number" min="16" max="10000"></label>
+      <label>Height (px)<input class="input" id="setup-height" type="number" min="16" max="10000"></label>
+      <label>DPI<input class="input" id="setup-dpi" type="number" min="1" max="2400"></label>
+    </div>
+    <p class="modal-note">A5 portrait at 300 dpi is 1748 &times; 2480 px. Changing the size after people have drawn moves nothing, so set it first.</p>
+    <label>Background colour<input class="input" id="setup-bg" type="text" placeholder="#ffffff"></label>
+    <div class="field"><span>Or a background image</span><input type="file" id="setup-bg-file" accept=".png,.jpg,.jpeg"></div>
+    <p class="modal-note" id="setup-bg-current"></p>
+    <p class="modal-error" id="setup-error" role="alert"></p>
   </div>
-  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="delete-go">Delete</button></div>
+  <div class="modal-actions"><button class="btn sky" data-close>Cancel</button><button class="btn" id="setup-save">Save</button></div>
+</dialog>
+
+<!-- Generic message / confirm box, built from the same modal parts. -->
+<dialog class="modal" id="modal-notice" aria-label="Notice">
+  <div class="modal-head"><span class="modal-title" id="notice-title"></span><button class="btn modal-close" data-close aria-label="Close"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2 2 12" stroke="#000" stroke-width="2.2" stroke-linecap="square"/></svg></button></div>
+  <div class="modal-body"><p class="notice-text" id="notice-text"></p></div>
+  <div class="modal-actions"><button class="btn sky" id="notice-cancel" data-close>Cancel</button><button class="btn" id="notice-ok">OK</button></div>
 </dialog>
 
 </body>
