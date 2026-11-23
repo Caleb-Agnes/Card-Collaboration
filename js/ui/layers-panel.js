@@ -23,6 +23,7 @@ let suppressClick = false;  // swallow the click that follows a drag
  * @param {(layer)=>string|null} o.thumb   data URL or null
  * @param {string|null} o.selectedId
  * @param {boolean} o.canReorder  host drag to reorder
+ * @param {boolean} [o.disabled]  every row unclickable (while reserving)
  * @param {(id)=>void} o.onSelect
  * @param {(id, index)=>void} o.onDrop   layer dropped at this position (0 = front)
  */
@@ -50,7 +51,8 @@ export function renderLayers(panel, o) {
     row.querySelector('.badge').textContent = owner.name;
     row.querySelector('.layer-label').textContent = layer.label || '(no name)';
     row.title = `${owner.name}: ${layer.label}\nPosition ${index + 1} of ${o.layersDesc.length} from the front`;
-    if (editable) row.addEventListener('click', () => { if (!suppressClick) o.onSelect(layer.id); });
+    if (o.disabled) row.disabled = true;
+    else if (editable) row.addEventListener('click', () => { if (!suppressClick) o.onSelect(layer.id); });
     else row.setAttribute('aria-disabled', 'true');
     if (o.canReorder) row.addEventListener('pointerdown', e => startDrag(e, panel, row, o));
     panel.append(row);

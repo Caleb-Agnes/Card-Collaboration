@@ -73,16 +73,20 @@ function renderAccount() {
 }
 
 function render() {
+  const reserving = view.mode === 'reserve';
+  // Undo any "reserving" disables from last time; the normal rules below then apply.
+  document.querySelectorAll('[data-reserve-off]').forEach(b => { b.disabled = false; delete b.dataset.reserveOff; });
   $('project-title').textContent = state.project.title;
   document.title = state.project.title + (store?.demo ? ' (demo)' : '');
   renderAccount();
   renderLayers($('layers'), {
+    disabled: reserving,
     layersDesc: layersDesc(),
     ownerStyle: l => styleFor(l.owner_id),
     canEdit,
     thumb: l => (l.image_path ? state.thumbs.get(l.image_path) : null),
     selectedId: state.selectedId,
-    canReorder: isHost(),
+    canReorder: isHost() && !reserving,
     onSelect: select,
     onDrop: moveToIndex,
   });
@@ -92,7 +96,8 @@ function render() {
   for (const id of ['btn-download', 'btn-upload', 'btn-rename', 'btn-delete']) $(id).disabled = !editable;
   $('btn-flip').disabled = !(editable && sel.image_path);
   const cantReserve = !state.me || (state.project.locked && !isHost());
-  $('btn-reserve').disabled = cantReserve;
+  $('btn-reserve').disabled = cantReserve && !reserving;  // you can always exit
+  $('btn-reserve').textContent = reserving ? 'Exit reservation' : 'Reserve an area';
   $('btn-preview').textContent = state.showGuides ? 'Hide reservations' : 'Show reservations';
   $('tools-note').textContent = !state.me ? 'Sign in to see the card.'
     : view.mode === 'reserve' ? 'Click to place each corner, then click the first point to finish. Backspace removes a point; Esc cancels.'
@@ -100,6 +105,12 @@ function render() {
   reserveDemo.show(view.mode === 'reserve', state.me ? styleFor(state.me.id).colour : undefined);
   $('host-panel').hidden = !isHost();
   $('btn-lock').textContent = state.project.locked ? 'Unlock editing' : 'Lock editing';
+  // While reserving, every other button is off until the shape is finished or reserving is exited.
+  if (reserving) {
+    document.querySelectorAll('.topbar button, .tools button').forEach(b => {
+      if (b.id !== 'btn-reserve' && !b.disabled) { b.disabled = true; b.dataset.reserveOff = ''; }
+    });
+  }
   view.redraw();
 }
 
@@ -476,6 +487,7 @@ needsLayer('btn-rename', 'modal-rename');
 let nudgeTimer = 0;
 document.addEventListener('keydown', e => {
   if (document.querySelector('dialog[open]') || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if (view.mode === 'reserve' && e.key.startsWith('Arrow')) return;  // no nudging while reserving
   if (e.key === 'Escape' && view.mode !== 'idle') { view.setMode('idle'); render(); return; }
   if (e.key === 'Backspace' && view.mode === 'reserve') { e.preventDefault(); view.undoPoint(); return; }
   const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];

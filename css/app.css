@@ -139,7 +139,7 @@ dialog.modal::backdrop{background:rgba(0,0,0,.35)}
 .panel-note{margin:0;padding:6px 10px;font-size:13px;opacity:.7}
 .panel-note:empty{display:none}
 /* Layer Options buttons that don't apply to the selected layer */
-.panel .btn:disabled{opacity:.55;cursor:default;filter:none;transform:none}
+.panel .btn:disabled,.acct-wrap .btn:disabled,.layer:disabled{opacity:.55;cursor:default;filter:none;transform:none}
 /* Modal extras */
 .modal-form{display:contents}
 .field-row{display:flex;gap:8px}
