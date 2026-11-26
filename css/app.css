@@ -64,6 +64,10 @@ button,input,select,textarea{font-family:inherit}
 .layer.is-edit:hover{filter:brightness(1.08)}
 .layer.is-edit:active{transform:scale(.95)}
 .layer.is-selected{background:var(--amber)}
+/* App addition: the selected row is clickable too (click again to deselect) */
+.layer.is-selected{cursor:pointer}
+.layer.is-selected:hover{filter:brightness(1.08)}
+.layer.is-selected:active{transform:scale(.95)}
 
 /* ---------- Canvas ---------- */
 .canvas-frame{width:min(420px,86vw);aspect-ratio:1/1.414;overflow:auto;border:1px solid var(--line)}

@@ -100,10 +100,11 @@ export function removeBackground(src, { colour, points = [] }) {
 /**
  * Trim the image and work out where it goes (U2).
  * @param {HTMLCanvasElement} canvas
- * @param {{project, layer, opaque: boolean}} ctx  layer = the target layer (for its shape)
+ * @param {{project, layer, opaque: boolean, previous?: {width, height}}} ctx
+ *   layer = the target layer; previous = its current image, if it has art already
  * @returns {{canvas, transform, warnings: string[]}}
  */
-export function placeUpload(canvas, { project, layer, opaque }) {
+export function placeUpload(canvas, { project, layer, opaque, previous }) {
   const warnings = [];
   if (opaque) warnings.push('This image has no transparent background, so the whole rectangle will cover the art behind it.');
 
@@ -114,9 +115,25 @@ export function placeUpload(canvas, { project, layer, opaque }) {
     return { canvas: t.canvas, transform: { x: t.dx, y: t.dy, scale: 1, flip: false, rotation: 0 }, warnings };
   }
 
-  // Any other image fits into its space's bounds, keeping its proportions.
   const t = trim(canvas);
   if (!t) throw new Error('That image is completely transparent.');
+
+  // Replacing existing art: take its place as it is now (moved, scaled, rotated, flipped), fitted
+  // to the same box. A new version with the same pixel size lands exactly where the old one was.
+  const old = layer.image_path && layer.transform && previous;
+  if (old) {
+    const p = layer.transform, ow = previous.width * p.scale, oh = previous.height * p.scale;
+    const scale = Math.min(ow / t.canvas.width, oh / t.canvas.height);
+    if (scale > 1.01) warnings.push(`This image is smaller than the art it replaces and has been enlarged ${scale.toFixed(1)}×, so it will print blurry.`);
+    const w = t.canvas.width * scale, h = t.canvas.height * scale;
+    return {
+      canvas: t.canvas,
+      transform: { x: p.x + (ow - w) / 2, y: p.y + (oh - h) / 2, scale, flip: !!p.flip, rotation: p.rotation || 0 },
+      warnings,
+    };
+  }
+
+  // First upload: fit into its space's bounds, keeping its proportions.
   const b = shapeBounds(layer.shape) || { x: 0, y: 0, w: project.width_px, h: project.height_px };
   const scale = Math.min(b.w / t.canvas.width, b.h / t.canvas.height);
   if (scale > 1.01) warnings.push(`This image is smaller than your space and has been enlarged ${scale.toFixed(1)}×, so it will print blurry.`);

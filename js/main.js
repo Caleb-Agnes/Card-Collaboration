@@ -430,7 +430,7 @@ $('upload-go').addEventListener('click', async () => {
       btn.textContent = 'Reading…';
       const u = await uploadSrc;
       const cleaned = u.opaque && $('upload-bg-on').checked;
-      uploadPrepared = placeUpload(cleaned ? u.result : u.canvas, { project: state.project, layer, opaque: u.opaque && !cleaned });
+      uploadPrepared = placeUpload(cleaned ? u.result : u.canvas, { project: state.project, layer, opaque: u.opaque && !cleaned, previous: layer.image_path ? state.images.get(layer.image_path) : null });
       if (uploadPrepared.warnings.length) {
         $('upload-warnings').replaceChildren(...uploadPrepared.warnings.map(w => Object.assign(document.createElement('p'), { textContent: '⚠ ' + w })));
         btn.textContent = 'Upload anyway';

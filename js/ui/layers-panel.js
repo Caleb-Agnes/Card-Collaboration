@@ -52,7 +52,8 @@ export function renderLayers(panel, o) {
     row.querySelector('.layer-label').textContent = layer.label || '(no name)';
     row.title = `${owner.name}: ${layer.label}\nPosition ${index + 1} of ${o.layersDesc.length} from the front`;
     if (o.disabled) row.disabled = true;
-    else if (editable) row.addEventListener('click', () => { if (!suppressClick) o.onSelect(layer.id); });
+    // Clicking the selected row again deselects it.
+    else if (editable) row.addEventListener('click', () => { if (!suppressClick) o.onSelect(layer.id === o.selectedId ? null : layer.id); });
     else row.setAttribute('aria-disabled', 'true');
     if (o.canReorder) row.addEventListener('pointerdown', e => startDrag(e, panel, row, o));
     panel.append(row);
