@@ -16,6 +16,58 @@ export function drawLayerImage(ctx, img, t) {
   ctx.restore();
 }
 
+/**
+ * Smooth downscaling. Browsers shrink a big image in one drawImage step by sampling only some
+ * of its pixels, so a large upload shown small looks jagged. Instead keep a chain of copies,
+ * each half the size of the last (made once per image and cached), and draw from the
+ * smallest copy that is still at least as big as it will appear.
+ */
+const mipCache = new WeakMap();  // image -> [image, 1/2 copy, 1/4 copy, ...]
+function mipChain(img) {
+  let chain = mipCache.get(img);
+  if (!chain) {
+    chain = [img];
+    let src = img;
+    while (src.width > 64 && src.height > 64) {
+      const c = makeCanvas(Math.max(1, Math.round(src.width / 2)), Math.max(1, Math.round(src.height / 2)));
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(src, 0, 0, c.width, c.height);
+      chain.push(c);
+      src = c;
+    }
+    mipCache.set(img, chain);
+  }
+  return chain;
+}
+
+/**
+ * Draw a layer's image smoothly when it appears smaller than its real size.
+ * @param {number} pxPerCanvasPx  device pixels per canvas pixel for this context
+ */
+export function drawLayerImageScaled(ctx, img, t, pxPerCanvasPx) {
+  const shown = t.scale * pxPerCanvasPx;  // device pixels per image pixel
+  if (!(shown < 0.75)) return drawLayerImage(ctx, img, t);
+  const chain = mipChain(img);
+  // Smallest copy that is still at least as large as it will be drawn.
+  let i = 0;
+  while (i + 1 < chain.length && chain[i + 1].width >= img.width * shown) i++;
+  const src = chain[i];
+  return drawLayerImage(ctx, src, { ...t, scale: t.scale * img.width / src.width });
+}
+
+/** Shrink an image smoothly into a w x h canvas (for thumbnails). */
+export function scaledCopy(img, w, h) {
+  const chain = mipChain(img);
+  let i = 0;
+  while (i + 1 < chain.length && chain[i + 1].width >= w) i++;
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(chain[i], 0, 0, w, h);
+  return c;
+}
+
 /** Axis-aligned bounds of a shape. */
 export function shapeBounds(shape) {
   if (!shape) return null;

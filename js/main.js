@@ -9,7 +9,7 @@ import { initZoom } from './ui/zoom.js';
 import { notice } from './ui/notice.js';
 import { createReserveDemo } from './ui/reserve-demo.js';
 import { CanvasView } from './canvas/view.js';
-import { layerBounds, overlapFraction, shapeBounds, canvasToBlob, makeCanvas } from './canvas/draw.js';
+import { layerBounds, overlapFraction, shapeBounds, canvasToBlob, makeCanvas, scaledCopy } from './canvas/draw.js';
 import { APPS, buildTemplate, saveBlob } from './templates.js';
 import { readImage, findBackground, removeBackground, placeUpload } from './upload.js';
 import { exportPng, exportPdf, exportBackup } from './export.js';
@@ -206,10 +206,7 @@ function loadImages() {
 function makeThumb(img) {
   const size = 76;  // 38px box at 2x
   const k = Math.min(size / img.width, size / img.height);
-  const c = makeCanvas(Math.max(1, Math.round(img.width * k)), Math.max(1, Math.round(img.height * k)));
-  const g = c.getContext('2d');
-  g.imageSmoothingQuality = 'high';
-  g.drawImage(img, 0, 0, c.width, c.height);
+  const c = scaledCopy(img, Math.max(1, Math.round(img.width * k)), Math.max(1, Math.round(img.height * k)));
   return c.toDataURL();
 }
 

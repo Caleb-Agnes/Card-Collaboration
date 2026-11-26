@@ -15,7 +15,7 @@
 //     a point whose line would cross the shape is refused
 // Touch keeps native scrolling for phone viewing, except while reserving.
 import {
-  drawLayerImage, drawBackground, layerBounds, layerFrame, frameCorners, layerContains,
+  drawLayerImageScaled, drawBackground, layerBounds, layerFrame, frameCorners, layerContains,
   traceShape, moveShape, resizeShape, shapeBounds, segmentsTouch,
 } from './draw.js';
 
@@ -146,7 +146,7 @@ export class CanvasView {
     const layers = this.#layers(scene);
     for (const l of layers) {
       const img = l.image_path && scene.images.get(l.image_path);
-      if (img && l.transform) drawLayerImage(ctx, img, l.transform);
+      if (img && l.transform) drawLayerImageScaled(ctx, img, l.transform, s * dpr);
     }
 
     // Overlays in screen space so lines and text stay crisp at any zoom.
