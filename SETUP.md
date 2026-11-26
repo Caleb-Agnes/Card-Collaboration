@@ -34,7 +34,15 @@ This creates the tables, the Row Level Security rules (who can change what), the
 
    If Supabase rejects `example.com` addresses, use another domain you own or a made-up one it accepts, for example `caleb@card.test`. Then change `EMAIL_DOMAIN` in `js/config.js` and the `domain` line at the top of `supabase/seed.sql` to match.
 
-To change a password later, open **Authentication > Users**, click the user, then **Reset password** or **Update user**.
+To change a password later, run this in **SQL Editor** (the reset-password email can't work, because the addresses aren't real):
+
+```sql
+update auth.users
+set encrypted_password = extensions.crypt('NEW-PASSWORD-HERE', extensions.gen_salt('bf'))
+where email = 'name@example.com';
+```
+
+It should report 1 row affected. Afterwards, delete the query from the SQL editor's history so the password isn't left there.
 
 ## 4. Create the project and profiles
 
