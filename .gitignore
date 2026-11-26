@@ -1,3 +1,9 @@
 node_modules/
 .DS_Store
 Thumbs.db
+
+# Planning notes kept locally, not published
+HANDOVER.md
+QUESTIONS.md
+requirements.md
+design-reference.html

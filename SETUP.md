@@ -28,17 +28,7 @@ This creates the tables, the Row Level Security rules (who can change what), the
    - Turn **off** "Allow new users to sign up".
    - Leave the **Email** provider on.
    - Turn **off** "Confirm email", if the option is shown.
-2. Open **Authentication > Users > Add user > Create new user** and create these seven, ticking **Auto Confirm User** each time:
-
-   | Email | Password |
-   | --- | --- |
-   | `caleb@example.com` | you choose |
-   | `sander@example.com` | you choose |
-   | `nam@example.com` | you choose |
-   | `maks@example.com` | you choose |
-   | `anna@example.com` | you choose |
-   | `adam@example.com` | you choose |
-   | `josh@example.com` | you choose |
+2. Open **Authentication > Users > Add user > Create new user** and create one user per person listed in [`js/profiles.js`](js/profiles.js). Each email is the name in lower case followed by `@example.com` (for example `alex@example.com`). Choose a password for each, and tick **Auto Confirm User** each time.
 
    Nobody ever sees these emails: friends sign in by picking their name. The passwords are stored hashed by Supabase, and the app never sees them except when someone types one in.
 

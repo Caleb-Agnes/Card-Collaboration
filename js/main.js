@@ -1,5 +1,5 @@
 // App entry point: state, rendering and wiring for every button and modal.
-// Requirement IDs (C1, P2, ...) refer to requirements.md.
+// Short codes in comments (C1, P2, ...) are requirement IDs from the planning notes.
 import { profileByName, swatch } from './profiles.js';
 import { createStore } from './store/index.js';
 import { createDropdown } from './ui/dropdown.js';

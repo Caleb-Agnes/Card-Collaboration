@@ -2,7 +2,7 @@
 -- Run once in the Supabase SQL editor (SETUP.md step 2). Safe to re-run: it drops
 -- and recreates the policies, but NOT the tables (so your data is kept).
 --
--- Security model (HANDOVER.md "Security rules"):
+-- Security model:
 --   * Any signed-in profile can read the project, profiles, layers and images.
 --   * A profile can insert, update and delete only its own layers and files;
 --     the host can do this for any layer.

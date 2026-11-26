@@ -3,9 +3,6 @@
 Seven friends build one layered birthday card in parallel. Each claims a space on a shared A5 canvas, downloads a template for their drawing app, draws their character, and uploads it. Everyone sees the card update live, and the host arranges the final layer order and exports a print-ready file.
 
 - **Setup:** [SETUP.md](SETUP.md) (Supabase, accounts, GitHub Pages)
-- **Requirements:** [requirements.md](requirements.md) (IDs like C1, U4 are used in code comments and commits)
-- **Look:** [design-reference.html](design-reference.html)
-- **Open questions:** [QUESTIONS.md](QUESTIONS.md)
 
 ## How it fits together
 

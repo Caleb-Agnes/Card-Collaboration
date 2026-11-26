@@ -1,6 +1,6 @@
 /*
   Collab Card Builder styles.
-  Sections down to "Custom dropdown" are copied as-is from design-reference.html (signed off).
+  Sections down to "Custom dropdown" are the signed-off base design.
   Anything added for the app lives under "App additions" at the bottom.
 */
 
@@ -91,8 +91,7 @@ button,input,select,textarea{font-family:inherit}
 .modal{width:min(360px,100%);background:#fff;border:1px solid var(--line);border-radius:12px 12px 0 0}
 .modal-head{display:flex;align-items:stretch;justify-content:space-between;min-height:40px;padding:0 0 0 14px;border-bottom:1px solid var(--divider);font-size:16px;font-weight:600}
 .modal-title{align-self:center}
-/* Close: fills the top-right corner, 5px inset, only that corner rounded.
-   Radius: 12px (matches modal) vs 9px still undecided - see HANDOVER.md */
+/* Close: fills the top-right corner, 5px inset, only that corner rounded (9px). */
 .btn.modal-close{flex:none;width:30px;margin:5px 5px 5px 0;padding:0;background-color:var(--amber);border-radius:0 9px 0 0;display:grid;place-items:center}
 .modal-close svg{width:14px;height:14px}
 .modal-body{display:flex;flex-direction:column;gap:10px;padding:14px;font-size:14px}
@@ -124,7 +123,7 @@ input[type=file]:active::file-selector-button{transform:scale(.95)}
    the overlay, focus trapping and Escape. These rules strip the browser's dialog defaults
    so the .modal styles above are all that show. */
 dialog.modal{padding:0;margin:auto;max-width:calc(100% - 32px);max-height:none;overflow:visible;color:#000}
-/* Backdrop: black at 35% (signed off, QUESTIONS.md 6). */
+/* Backdrop: black at 35%. */
 dialog.modal::backdrop{background:rgba(0,0,0,.35)}
 /* Small error line in modals (e.g. no name picked). Uses existing text colour only. */
 .modal-error{margin:0;font-size:13px;font-weight:500}
